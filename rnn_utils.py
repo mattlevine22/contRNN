@@ -156,27 +156,18 @@ class Paper_NN(torch.nn.Module):
                 # output does not include initial condition!
 
                 # initialize output variables
-                m_now      = torch.zeros( (n_steps, self.dim_x) )
-                x_next     = torch.zeros( (n_steps, self.dim_x) )
-                latent_next = torch.zeros( (n_steps, self.dim_y) )
+                udot_now      = torch.zeros( (n_steps, self.dim_x + self.dim_y) )
+                u_next     = torch.zeros( (n_steps, self.dim_x + self.dim_y) )
 
                 # run loop
-                u_next = u0
+                u_now = u0
                 for k in range(n_steps):
-                    u_now = u_next
-
                     # full rnn state
-                    u_next = self.step_integrator(u0=u_now, dt=self.dt)
-                    udot_now = self.rhs(u_now)
+                    udot_now[k] = self.rhs(u_now)
+                    u_now = self.step_integrator(u0=u_now, dt=self.dt)
+                    u_next[k] = u_now
 
-                    # observed residual derivative
-                    m_now[k] = udot_now[:,:self.dim_x]
-
-                    # separate observed and latent states
-                    x_next[k]      = u_next[:,:self.dim_x]
-                    latent_next[k] = u_next[:,self.dim_x:]
-
-                return m_now, x_next, latent_next
+                return udot_now, u_next
 
 
             def forward(self, inp):
@@ -187,14 +178,7 @@ class Paper_NN(torch.nn.Module):
                 u_next = self.step_integrator(u0=inp, dt=self.dt)
                 udot_now = self.rhs(inp)
 
-                # observed residual derivative
-                m_now = udot_now[:,:self.dim_x]
-
-                # separate observed and latent states
-                x_next      = u_next[:,:self.dim_x]
-                latent_next = u_next[:,self.dim_x:]
-
-                return m_now, x_next, latent_next
+                return udot_now, u_next
 
 
 def batched_windows(T_total, T_window, shuffle=False):
@@ -313,13 +297,11 @@ def train_model(model,
             u_now = torch.hstack( (x_now, latent_now) ) # create full state vector
 
             # run forward model
-            m_now_pred, x_next_pred, latent_next_pred = model(u_now)
-
-            u_next_pred   = torch.hstack( (x_next_pred, latent_next_pred) )
+            udot_now_pred, u_next_pred = model(u_now)
 
             # compute losses
-            m_loss        = myloss(m_now_pred, m_now) #residual observed derivative
-            obs_next_loss = myloss(x_next_pred, x_next) #predicting next observed state (1-step RK45 predictor)
+            m_loss        = myloss(udot_now_pred[:,:model.dim_x], m_now) #residual observed derivative
+            obs_next_loss = myloss(u_next_pred[:,:model.dim_x], x_next) #predicting next observed state (1-step RK45 predictor)
             # check that the rk45_loss = 0 in observed components unless there is noise in the data
             rk45_loss     = myloss(u_now[1:], u_next_pred[:-1]) # all states should not deviate much from RK45 solution
 
@@ -351,18 +333,18 @@ def train_model(model,
                     u_now = u_next #u_k
 
                     # run forward model (predict for time k+1)
-                    m_now_pred, x_next_pred, latent_next_pred = model(u_now)
+                    udot_now_pred, u_next_pred = model(u_now)
 
                     # update predicted state w.r.t. data (here, force with observation of x_k+1)
-                    u_next = torch.hstack( (x_now[k+1].view(1,-1), latent_next_pred.view(1,-1)) )
-
+                    u_next = torch.hstack( (x_now[k+1].view(1,-1), u_next_pred[:,model.dim_x:].view(1,-1)) )
 
                 # TEST! run on the rest of the window of data
-                m_now_pred, x_next_pred, latent_next_pred = model.many_steps(u0 = u_next, n_steps=x_now.shape[0]-n_warmup)
+                # m_now_pred, x_next_pred, latent_next_pred = model.many_steps(u0 = u_next, n_steps=x_now.shape[0]-n_warmup)
+                udot_now_pred, u_next_pred = model.many_steps(u0 = u_next, n_steps=x_now.shape[0]-n_warmup)
 
                 # compute test losses (use item because we don't need gradients when testing)
-                m_loss        = myloss(m_now_pred, m_now[n_warmup:]).item() #residual observed derivative
-                obs_next_loss = myloss(x_next_pred, x_next[n_warmup:]).item() #predicting next observed state (1-step RK45 predictor)
+                m_loss        = myloss(udot_now_pred[:,:model.dim_x], m_now[n_warmup:]).item() #residual observed derivative
+                obs_next_loss = myloss(u_next_pred[:,:model.dim_x], x_next[n_warmup:]).item() #predicting next observed state (1-step RK45 predictor)
                 # (rk45 loss does not apply in testing, because solutions come directly from RK45)
 
                 test_loss += m_loss + obs_next_loss
