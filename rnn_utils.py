@@ -132,7 +132,7 @@ class Paper_NN(torch.nn.Module):
                 f0 = self.f0(inp) # observed dimensions of inp must be in original coordinates
 
                 # get nn inputs (normalize observed input dimensions)
-                nn_inp = inp
+                nn_inp = inp.clone()
                 nn_inp[:,:self.dim_x] = self.x_normalizer.encode(nn_inp[:,:self.dim_x])
 
                 # get nn outputs (unnormalize observed output dimensions)
