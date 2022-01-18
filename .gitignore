@@ -1,4 +1,4 @@
-outputs/
+output*
 archive/
 
 *.DS_Store
