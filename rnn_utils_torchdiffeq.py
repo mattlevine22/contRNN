@@ -220,7 +220,8 @@ def train_model(model,
         err = torch.mean( (xdot_train_true - xdot_train)**2 ).item()
         print('True vs approx Xdot MSE = ', err)
 
-    # get residual
+    # get residual (fitting to the whole right hand side---f0+fnn = xdot)
+    # the usage of "m" here is now a mis-nomer...
     m_train = xdot_train# - model.f0(x_train).detach()
     m_test = xdot_test# - model.f0(x_test).detach()
 
@@ -331,8 +332,8 @@ def train_model(model,
                 plt.savefig(os.path.join(output_dir,'ContinueTraining_Short_Epoch{}'.format(ep)))
                 plt.close()
 
-            if ep%1000==0:
-                t_eval = dt_data*np.arange(0, 1e6)
+            if ep%2000==0 and ep>0:
+                t_eval = dt_data*np.arange(0, 1e7)
                 t_span = [t_eval[0], t_eval[-1]]
                 settings= {'method': 'RK45'}
                 sol = my_solve_ivp( u0.reshape(-1), lambda t, y: model.rhs_numpy(y,t), t_eval, t_span, settings)
