@@ -332,7 +332,7 @@ def train_model(model,
         # validate by running off-data and predicting ahead
         model.eval()
         with torch.no_grad():
-            u0 = u_pred[-1,-1,:].data
+            u0 = u_pred[-1,-1,:].cpu().data
 
             if ep%100==0:# and ep>0:
                 print('solving for IC = ', u0)
@@ -359,11 +359,11 @@ def train_model(model,
                     T_long = 5e3
                 f_path = os.path.join(output_dir,'ContinueTraining_Epoch{}'.format(ep))
                 # try:
-                x_normalizer.cpu()
-                test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path)
-                x_normalizer.cuda()
                 bp()
-
+                if hpc:
+                    test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path)
+                else:
+                    test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path)
             # if ep%2000==0 and ep>0:
             #     t_eval = dt_data*np.arange(0, 1e6)
             #     # t_span = [t_eval[0], t_eval[-1]]
