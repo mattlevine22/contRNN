@@ -12,6 +12,7 @@ import torch
 from rnn_utils_torchdiffeq_ivan_bugfix import Paper_NN, train_model
 from pdb import set_trace as bp
 
+import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--hpc', default=0, type=int)
 FLAGS = parser.parse_args()
