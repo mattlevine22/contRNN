@@ -206,7 +206,9 @@ def train_model(model,
                 learning_rate=0.1,
                 weight_decay=0, #1e-4, or 1e-5?
                 step_size=100,
-                gamma=0.5
+                gamma=0.5,
+                shuffle_train_loader=False,
+                shuffle_test_loader=False
             ):
 
     # batch_size now refers to the number of windows selected in an epoch
@@ -242,8 +244,8 @@ def train_model(model,
 
     train_set = TimeseriesDataset(x_train, train_times, window, obs_inds, known_inits)
     test_set = TimeseriesDataset(x_test, test_times, window, obs_inds, known_inits)
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs_train, shuffle=False, drop_last=True)
-    test_loader = torch.utils.data.DataLoader(test_set, batch_size=bs_test, shuffle=False, drop_last=True)
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs_train, shuffle=shuffle_train_loader, drop_last=True)
+    test_loader = torch.utils.data.DataLoader(test_set, batch_size=bs_test, shuffle=shuffle_test_loader, drop_last=True)
 
     # create initial conditions for each window
     my_list = ['y_latent']
@@ -321,7 +323,7 @@ def train_model(model,
         if ep%1==0:
             linIn_nrm = torch.linalg.norm(model.linearCell_in.weight.cpu().data, ord=2).cpu().data.numpy()
             linOut_nrm = torch.linalg.norm(model.linearCell_out.weight.cpu().data, ord=2).cpu().data.numpy()
-            print('Epoch', ep, 'Train loss:', train_loss, ', |W_in|_2 = ', linIn_nrm, ', |W_out|_2 = ', linOut_nrm)
+            print('Epoch', ep, 'Train loss:', train_loss, ', |W_in|_2 = ', linIn_nrm, ', |W_out|_2 = ', linOut_nrm, 'Time per epoch [sec] =', default_timer() - t1)
             torch.save(model, os.path.join(output_dir, 'rnn.pt'))
 
 

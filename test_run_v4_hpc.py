@@ -22,7 +22,7 @@ FLAGS = parser.parse_args()
 if FLAGS.hpc:
     output_dir = '/groups/astuart/mlevine/contRNN/l63/test_givenIC_normalizeICs'
 else:
-    output_dir = 'output/test_givenIC_normalizeICs'
+    output_dir = 'output/test_givenIC_normalizeICs_TESTING'
 
 # load L63 data sampled at dt=0.01
 dt=0.01
@@ -69,6 +69,7 @@ print('N batches =', batch_size)
 
 print('Begin RNN training...')
 train_model(my_rnn, X_train.T, X_val.T,
+            shuffle_train_loader=True, #good run did False
             hpc=FLAGS.hpc,
             do_normalization=True,
             known_inits=True,
