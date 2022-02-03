@@ -359,7 +359,6 @@ def train_model(model,
                     T_long = 5e3
                 f_path = os.path.join(output_dir,'ContinueTraining_Epoch{}'.format(ep))
                 # try:
-                bp()
                 if hpc:
                     test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path)
                 else:
@@ -412,7 +411,10 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
 
     # solve approximate 3D ODE at initial condition x0
     if nn_normalizer is None:
-        sol_4d_nn = my_solve_ivp( x0.reshape(-1), rhs_nn, t_eval, t_span, settings)
+        if hpc:
+            sol_4d_nn = odeint(rhs_nn, y0=x0.reshape(1,-1).cuda(), t=torch.Tensor(t_eval).cuda())
+        else:
+            sol_4d_nn = my_solve_ivp( x0.reshape(-1), rhs_nn, t_eval, t_span, settings)
     else:
         sol_4d_nn = my_solve_ivp( nn_normalizer.encode(x0).reshape(-1), rhs_nn, t_eval, t_span, settings)
         sol_4d_nn = nn_normalizer.decode(torch.FloatTensor(sol_4d_nn)).cpu().data.numpy()
