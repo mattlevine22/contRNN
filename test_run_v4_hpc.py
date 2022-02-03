@@ -9,7 +9,7 @@ sys.path.append(os.path.join(local_path, 'code/modules'))
 import numpy as np
 # from rnn_utils_copyNbedyn import Paper_NN, train_model, analyze_models
 import torch
-from rnn_utils_torchdiffeq_ivan_bugfix import Paper_NN, train_model
+from rnn_utils_torchdiffeq_ivan_bugfix_cuda import Paper_NN, train_model
 from pdb import set_trace as bp
 
 import argparse
