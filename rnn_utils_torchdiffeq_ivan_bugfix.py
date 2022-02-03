@@ -283,7 +283,7 @@ def train_model(model,
             if ep==0 and known_inits:
                 with torch.no_grad():
                     u_pred_BEST = odeint(rhs_true, y0=u0.T, t=times[0])
-                    loss_LB = myloss(x.squeeze(), u_pred_BEST[:,0,:].squeeze().T).data.numpy()
+                    loss_LB = myloss(x.squeeze(), u_pred_BEST[:,0,:].squeeze().T).cpu().data.numpy()
                     print('Loss of True model (OVERFITTING LB):', loss_LB)
 
             # run forward model
@@ -315,8 +315,8 @@ def train_model(model,
 
         train_loss /= len(train_loader)
         if ep%1==0:
-            linIn_nrm = torch.linalg.norm(model.linearCell_in.weight.data, ord=2).data.numpy()
-            linOut_nrm = torch.linalg.norm(model.linearCell_out.weight.data, ord=2).data.numpy()
+            linIn_nrm = torch.linalg.norm(model.linearCell_in.weight.data, ord=2).cpu().data.numpy()
+            linOut_nrm = torch.linalg.norm(model.linearCell_out.weight.data, ord=2).cpu().data.numpy()
             print('Epoch', ep, 'Train loss:', train_loss, ', |W_in|_2 = ', linIn_nrm, ', |W_out|_2 = ', linOut_nrm)
             torch.save(model, os.path.join(output_dir, 'rnn.pt'))
 
@@ -334,7 +334,7 @@ def train_model(model,
                 # t_span = [t_eval[0], t_eval[-1]]
                 settings= {'method': 'RK45'}
                 try:
-                    sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0).reshape(1,-1), t=torch.Tensor(t_eval))).data.numpy().squeeze()
+                    sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0).reshape(1,-1), t=torch.Tensor(t_eval))).cpu().data.numpy().squeeze()
                 except:
                     print('Solver failed')
                     continue
@@ -403,7 +403,7 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
         sol_4d_nn = my_solve_ivp( x0.reshape(-1), rhs_nn, t_eval, t_span, settings)
     else:
         sol_4d_nn = my_solve_ivp( nn_normalizer.encode(x0).reshape(-1), rhs_nn, t_eval, t_span, settings)
-        sol_4d_nn = nn_normalizer.decode(torch.FloatTensor(sol_4d_nn)).data.numpy()
+        sol_4d_nn = nn_normalizer.decode(torch.FloatTensor(sol_4d_nn)).cpu().data.numpy()
 
     nn_max = len(sol_4d_nn)
     true_max = len(sol_3d_true)
