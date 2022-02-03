@@ -342,6 +342,7 @@ def train_model(model,
                 try:
                     sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0).reshape(1,-1), t=torch.Tensor(t_eval))).cpu().data.numpy().squeeze()
                 except:
+                    bp()
                     print('Solver failed')
                     continue
 

@@ -33,6 +33,9 @@ X_train = np.load(train_path)
 X_test  = np.load(test_path)
 X_val = X_test
 
+print('!!!!!!!!!!WARNING--using TEST DATA for training because it is bigger for now......!!!!!!!!!!!!!!')
+X_train = X_test
+
 # X_train = X_train[:,1000:5000]
 print('Train shape:',X_train.shape)
 print('Test shape:', X_val.shape)
