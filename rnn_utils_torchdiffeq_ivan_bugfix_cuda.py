@@ -308,9 +308,9 @@ def train_model(model,
                     K = u_pred.data.shape[-1]
                     fig, axs = plt.subplots(nrows=K, figsize=(20, 10))
                     for k in range(K):
-                        axs[k].plot(times[b], u_pred[:,b,k].cpu().data, label='Approx State {}'.format(k))
+                        axs[k].plot(times[b].cpu().data, u_pred[:,b,k].cpu().data, label='Approx State {}'.format(k))
                         try:
-                            axs[k].plot(times[b], x[b,:,k].cpu().data, label='True State {}'.format(k))
+                            axs[k].plot(times[b].cpu().data, x[b,:,k].cpu().data, label='True State {}'.format(k))
                         except:
                             pass
                         axs[k].legend()
