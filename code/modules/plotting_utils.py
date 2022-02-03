@@ -18,17 +18,72 @@ from matplotlib  import cm
 import pickle
 from matplotlib import colors
 from matplotlib.colors import Normalize
-import six
 from scipy.interpolate import interpn
-color_dict = dict(six.iteritems(colors.cnames))
 
 # font = {'size': 16}
 # matplotlib.rc('font', **font)
 
 # sns.set(rc={'text.usetex': True}, font_scale=4)
-
-
 from pdb import set_trace as bp
+
+
+def find_collapse(X, times=None, window=5000, true_mean=-0.07, true_sd=7.92):
+    N, K = X.shape
+    if times is None:
+        times = np.arange(N)
+
+    # we will only look for collapse in first component of X
+    n_blocks = int(N / window)
+
+    collapse_time = np.Inf
+    for b in range(n_blocks):
+        i0 = b * window
+        i1 = (b+1) * window - 1
+        x_block = X[i0:i1,0]
+
+        block_mean = np.mean(x_block)
+        block_sd = np.std(x_block)
+
+        abs_rel_diff_mean = np.abs(block_mean - true_mean) / true_mean
+        abs_rel_diff_sd = np.abs(block_sd - true_sd) / true_sd
+
+        # print('Mean diff', abs_rel_diff_mean)
+        # print('SD diff', abs_rel_diff_sd)
+
+        # if abs_rel_diff_mean > 0.2:
+        #     collapse_time = times[i1]
+        #     print('mean threshold crossed at Time', collapse_time)
+        #
+        #     return collapse_time
+        if abs_rel_diff_sd  > 0.5:
+            collapse_time = times[i1]
+            print('SD threshold crossed at Time', collapse_time)
+            return collapse_time
+
+    return collapse_time
+
+
+def plot_trajectory(X, fig_path, times=None, plot_collapse=False):
+    N, K = X.shape
+    if times is None:
+        times = np.arange(N)
+
+    if plot_collapse:
+        collapse_time = find_collapse(X, times)
+
+    fig, ax = plt.subplots(nrows=K, ncols=1, figsize=(12,6))
+    for k in range(K):
+        ax[k].plot(times, X[:,k])
+        if plot_collapse and collapse_time < np.Inf:
+            ax[k].axvline(x = collapse_time, color = 'r')
+        ax[k].set_ylabel(r'X_{}'.format(k))
+    ax[k].set_xlabel('Time')
+
+    plt.savefig(fig_path)
+    plt.close()
+
+    if plot_collapse:
+        return collapse_time
 
 def plot_training_progress(lossdict, fig_path):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12,6))

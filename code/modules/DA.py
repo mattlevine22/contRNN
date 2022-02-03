@@ -212,7 +212,7 @@ class ENKF(object):
 				self.dim_x = self.H.shape[1]
 				self.Ix = torch.eye(self.dim_x)
 				if K_zero:
-					self.K = torch.nn.Parameter(torch.zeros_like(self.H.T))
+					self.K = torch.nn.Parameter(torch.zeros_like(self.H.T, dtype=torch.float))
 				else:
 					self.K = torch.nn.Parameter(self.H.T)
 

@@ -10,7 +10,7 @@ def Lorenz_63(S,t,sigma=10.0,rho=28.0,beta=8.0/3):
     dS  = np.array([x_1,x_2,x_3]);
     return dS
 
-def L63_torch(S,t,sigma=10.0,rho=28.0,beta=8.0/3):
+def L63_torch(t,S,sigma=10.0,rho=28.0,beta=8.0/3):
     """ Lorenz-63 dynamical model. """
     x_1 = sigma*(S[1]-S[0])
     x_2 = S[0]*(rho-S[2])-S[1]

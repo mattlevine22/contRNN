@@ -25,7 +25,11 @@ from pdb import set_trace as bp
 #     ('xk_star', float64[:])               # a simple scalar field
 # ]
 
-def my_solve_ivp(ic, f_rhs, t_eval, t_span, settings, error_if_failed=False):
+def my_solve_ivp(ic, f_rhs, t_eval, t_span=None, settings={'method': 'RK45'}, error_if_failed=False):
+
+    if t_span is None:
+        t_span = [t_eval[0], t_eval[-1]]
+
     u0 = np.copy(ic)
     if settings['method']=='Euler':
         dt = settings['dt']
@@ -37,9 +41,12 @@ def my_solve_ivp(ic, f_rhs, t_eval, t_span, settings, error_if_failed=False):
             u0 += dt * rhs
             u_sol[i] = u0
     else:
-        sol = solve_ivp(fun=lambda t, y: f_rhs(t, y), t_span=t_span, y0=u0, t_eval=t_eval, **settings)
-        if not sol.success and error_if_failed:
-            raise Exception(sol.message)
+        try:
+            sol = solve_ivp(fun=lambda t, y: f_rhs(y, t), t_span=t_span, y0=u0, t_eval=t_eval, **settings)
+        except:
+            sol = solve_ivp(fun=f_rhs, t_span=t_span, y0=u0, t_eval=t_eval, **settings)
+            if not sol.success and error_if_failed:
+                raise Exception(sol.message)
         u_sol = sol.y.T
     return np.squeeze(u_sol)
 
@@ -664,7 +671,7 @@ class L63:
   """
 
   def __init__(_s,
-      a = 10, b = 28, c = 8/3, epsGP=1, share_gp=False, add_closure=False, random_closure=False):
+      a = 10, b = 28, c = 8/3, lGP=10.0, epsGP=1, share_gp=False, add_closure=False, random_closure=False):
     '''
     Initialize an instance: setting parameters and xkstar
     '''
@@ -673,6 +680,7 @@ class L63:
     _s.b = b
     _s.c = c
     _s.epsGP = epsGP
+    _s.lGP = lGP
     _s.K = 3 # state dims
     _s.hx = 1 # just useful when re-using L96 code
     _s.slow_only = False
@@ -705,12 +713,12 @@ class L63:
   def slow(_s, y, t):
     return _s.rhs(y,t)
 
-  def is_divergent(_s, S):
+  def is_divergent(_s, S, t):
     ''' define kill switch for when integration has blown up'''
     if not _s.has_diverged:
         _s.has_diverged = any(np.abs(S) > 200)
         if _s.has_diverged:
-            print('INTEGRATION HAS DIVERGED!!!', S)
+            print('INTEGRATION HAS DIVERGED at time {}!!!'.format(t), S)
     return _s.has_diverged
 
   def rhs(_s, S, t):
@@ -722,8 +730,7 @@ class L63:
     y = S[1]
     z = S[2]
 
-    if _s.is_divergent(S):
-        return np.zeros(3)
+    _s.is_divergent(S, t) # check if divergent (dont DO anything though!)
 
     foo_rhs = np.empty(3)
     foo_rhs[0] = -a*x + a*y
@@ -767,19 +774,32 @@ class L63:
   def set_predictor(_s, predictor):
     _s.predictor = predictor
 
-  def set_random_predictor(_s):
+  def set_random_predictor_GP(_s):
 
     x1 = np.arange(-20, 20, 5)
     x2 = np.arange(-25, 25, 5)
     x3 = np.arange(5, 45, 5)
     X = np.stack(np.meshgrid(x1, x2, x3), -1).reshape(-1, 3)
 
-    GP_ker = ConstantKernel(1.0, (1e-2, 1e5)) * RBF(10.0, (1e-2, 1e+6))
+    GP_ker = ConstantKernel(1.0, (1e-2, 1e5)) * RBF(_s.lGP, (1e-2, 1e+6))
     my_gpr = GaussianProcessRegressor(kernel = GP_ker, alpha=0, n_restarts_optimizer=10)
     y = np.zeros(X.shape)
     for k in range(_s.K):
         y[:,k] = np.squeeze(my_gpr.sample_y(X, n_samples=1, random_state=k))
     my_gpr.fit(X=X, y=y)
+    _s.set_predictor(my_gpr.predict)
+    _s.X = X
+    _s.y = y
+
+    # make a denser grid for evaluating the GP on
+    x1 = np.arange(-20, 20, 1)
+    x2 = np.arange(-25, 25, 1)
+    x3 = np.arange(5, 45, 1)
+    _s.Xdense = np.stack(np.meshgrid(x1, x2, x3), -1).reshape(-1, 3)
+
+  def set_random_predictor(_s, D=100, lengthscale=1):
+
+
     _s.set_predictor(my_gpr.predict)
     _s.X = X
     _s.y = y
