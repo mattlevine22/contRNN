@@ -403,7 +403,6 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
     t_span = [t_eval[0], t_eval[-1]]
     settings= {'method': 'RK45'}
 
-    bp()
     ## Generate solutions ##
     # solve true 3D ODE at initial condition x0
     if sol_3d_true is None:
