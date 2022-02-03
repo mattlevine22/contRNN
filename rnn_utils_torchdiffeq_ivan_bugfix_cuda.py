@@ -308,9 +308,9 @@ def train_model(model,
                     K = u_pred.data.shape[-1]
                     fig, axs = plt.subplots(nrows=K, figsize=(20, 10))
                     for k in range(K):
-                        axs[k].plot(times[b], u_pred[:,b,k].data, label='Approx State {}'.format(k))
+                        axs[k].plot(times[b], u_pred[:,b,k].cpu().data, label='Approx State {}'.format(k))
                         try:
-                            axs[k].plot(times[b], x[b,:,k].data, label='True State {}'.format(k))
+                            axs[k].plot(times[b], x[b,:,k].cpu().data, label='True State {}'.format(k))
                         except:
                             pass
                         axs[k].legend()
@@ -319,8 +319,8 @@ def train_model(model,
 
         train_loss /= len(train_loader)
         if ep%1==0:
-            linIn_nrm = torch.linalg.norm(model.linearCell_in.weight.data, ord=2).cpu().data.numpy()
-            linOut_nrm = torch.linalg.norm(model.linearCell_out.weight.data, ord=2).cpu().data.numpy()
+            linIn_nrm = torch.linalg.norm(model.linearCell_in.weight.cpu().data, ord=2).cpu().data.numpy()
+            linOut_nrm = torch.linalg.norm(model.linearCell_out.weight.cpu().data, ord=2).cpu().data.numpy()
             print('Epoch', ep, 'Train loss:', train_loss, ', |W_in|_2 = ', linIn_nrm, ', |W_out|_2 = ', linOut_nrm)
             torch.save(model, os.path.join(output_dir, 'rnn.pt'))
 
@@ -330,7 +330,7 @@ def train_model(model,
         # validate by running off-data and predicting ahead
         model.eval()
         with torch.no_grad():
-            u0 = u_pred[-1,-1,:].data
+            u0 = u_pred[-1,-1,:].cpu().data
 
             if ep%100==0:# and ep>0:
                 print('solving for IC = ', u0)
