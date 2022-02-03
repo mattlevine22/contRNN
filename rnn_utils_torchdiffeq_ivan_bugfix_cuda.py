@@ -359,9 +359,10 @@ def train_model(model,
                     T_long = 5e3
                 f_path = os.path.join(output_dir,'ContinueTraining_Epoch{}'.format(ep))
                 # try:
-                bp()
+                x_normalizer.cpu()
                 test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path)
-
+                x_normalizer.cuda()
+                bp()
 
             # if ep%2000==0 and ep>0:
             #     t_eval = dt_data*np.arange(0, 1e6)
