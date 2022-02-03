@@ -61,7 +61,7 @@ except:
 
 n_train = X_train.shape[1]
 window = 100
-batch_size = 100
+batch_size = 1000
 
 print('N train =', n_train)
 print('batch window =', window)
