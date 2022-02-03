@@ -332,7 +332,7 @@ def train_model(model,
         # validate by running off-data and predicting ahead
         model.eval()
         with torch.no_grad():
-            u0 = u_pred[-1,-1,:].cpu().data
+            u0 = u_pred[-1,-1,:].data
 
             if ep%100==0:# and ep>0:
                 print('solving for IC = ', u0)
