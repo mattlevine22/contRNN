@@ -323,7 +323,7 @@ def train_model(model,
         if ep%1==0:
             linIn_nrm = torch.linalg.norm(model.linearCell_in.weight.cpu().data, ord=2).cpu().data.numpy()
             linOut_nrm = torch.linalg.norm(model.linearCell_out.weight.cpu().data, ord=2).cpu().data.numpy()
-            print('Epoch', ep, 'Train loss:', train_loss, ', |W_in|_2 = ', linIn_nrm, ', |W_out|_2 = ', linOut_nrm, 'Time per epoch [sec] =', default_timer() - t1)
+            print('Epoch', ep, 'Train loss:', train_loss, ', |W_in|_2 = ', linIn_nrm, ', |W_out|_2 = ', linOut_nrm, 'Time per epoch [sec] =', round(default_timer() - t1))
             torch.save(model, os.path.join(output_dir, 'rnn.pt'))
 
 
