@@ -46,6 +46,9 @@ my_rnn = Paper_NN(
                     dim_hidden=50,
                     activation='gelu')
 
+if FLAGS.hpc:
+    my_rnn = my_rnn.cuda()
+
 # try to load the pre-trained RNN
 try:
     my_rnn = torch.load(os.path.join(output_dir, 'rnn.pt'))
