@@ -340,9 +340,11 @@ def train_model(model,
                 # t_span = [t_eval[0], t_eval[-1]]
                 settings= {'method': 'RK45'}
                 try:
-                    sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0).reshape(1,-1), t=torch.Tensor(t_eval))).cpu().data.numpy().squeeze()
+                    if hpc:
+                        sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0.cuda()).reshape(1,-1), t=torch.Tensor(t_eval).cuda())).cpu().data.numpy().squeeze()
+                    else:
+                        sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0).reshape(1,-1), t=torch.Tensor(t_eval))).cpu().data.numpy().squeeze()
                 except:
-                    bp()
                     print('Solver failed')
                     continue
 
@@ -357,6 +359,7 @@ def train_model(model,
                     T_long = 5e3
                 f_path = os.path.join(output_dir,'ContinueTraining_Epoch{}'.format(ep))
                 # try:
+                bp()
                 test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path)
 
 
