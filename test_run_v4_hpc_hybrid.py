@@ -17,6 +17,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--hpc', default=0, type=int)
 parser.add_argument('--gpu', default=0, type=int)
 parser.add_argument('--window', default=100, type=int)
+parser.add_argument('--epochs', default=10000, type=int)
 parser.add_argument('--known_inits', default=1, type=int)
 parser.add_argument('--output_dir', default='test_givenIC_normalizeICs', type=str)
 FLAGS = parser.parse_args()
@@ -81,7 +82,7 @@ train_model(my_rnn, X_train.T, X_val.T,
             known_inits=FLAGS.known_inits,
             pre_trained=pre_trained,
             weight_decay=0,
-            epochs=10000,
+            epochs=FLAGS.epochs,
             learning_rate=1e-1,
             gamma=1,
             step_size=50,
