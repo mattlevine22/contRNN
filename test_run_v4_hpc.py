@@ -15,6 +15,7 @@ from pdb import set_trace as bp
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--hpc', default=0, type=int)
+parser.add_argument('--gpu', default=0, type=int)
 FLAGS = parser.parse_args()
 
 
@@ -49,7 +50,7 @@ my_rnn = Paper_NN(
                     dim_hidden=50,
                     activation='gelu')
 
-if FLAGS.hpc:
+if FLAGS.gpu:
     my_rnn = my_rnn.cuda()
 
 # try to load the pre-trained RNN
@@ -73,7 +74,7 @@ print('N batches =', batch_size)
 print('Begin RNN training...')
 train_model(my_rnn, X_train.T, X_val.T,
             shuffle_train_loader=True, #good run did False
-            hpc=FLAGS.hpc,
+            use_gpu=FLAGS.gpu,
             do_normalization=True,
             known_inits=True,
             pre_trained=pre_trained,

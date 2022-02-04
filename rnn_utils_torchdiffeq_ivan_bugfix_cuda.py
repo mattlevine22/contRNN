@@ -190,7 +190,7 @@ class Paper_NN(torch.nn.Module):
 def train_model(model,
                 x_train,
                 X_validation,
-                hpc=False,
+                use_gpu=False,
                 known_inits=False,
                 pre_trained=False,
                 do_normalization=False,
@@ -226,7 +226,7 @@ def train_model(model,
         x_normalizer = UnitGaussianNormalizer(x_train)
     else:
         x_normalizer = TrivialNormalizer(x_train)
-    if hpc:
+    if use_gpu:
         x_normalizer.cuda()
     model.x_normalizer = x_normalizer
 
@@ -271,7 +271,7 @@ def train_model(model,
 
         batch = -1
         for x, times, idx in train_loader:
-            if hpc:
+            if use_gpu:
                 x , times , idx = x.cuda(), times.cuda(), idx.cuda()
             batch += 1
             optimizer.zero_grad()
@@ -282,7 +282,7 @@ def train_model(model,
             else:
                 u0 = torch.hstack( (x[:,0,:], model.y0[idx]) ) # create full state vector
 
-            if hpc:
+            if use_gpu:
                 u0 = u0.cuda()
 
             # evaluate perfect model
@@ -340,7 +340,7 @@ def train_model(model,
                 # t_span = [t_eval[0], t_eval[-1]]
                 settings= {'method': 'RK45'}
                 try:
-                    if hpc:
+                    if use_gpu:
                         sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0.cuda()).reshape(1,-1), t=torch.Tensor(t_eval).cuda())).cpu().data.numpy().squeeze()
                     else:
                         sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0).reshape(1,-1), t=torch.Tensor(t_eval))).cpu().data.numpy().squeeze()
@@ -359,7 +359,7 @@ def train_model(model,
                     T_long = 5e3
                 f_path = os.path.join(output_dir,'ContinueTraining_Epoch{}'.format(ep))
                 # try:
-                if hpc:
+                if use_gpu:
                     try:
                         test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path)
                     except:
@@ -413,7 +413,7 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
 
     # solve approximate 3D ODE at initial condition x0
     if nn_normalizer is None:
-        if hpc:
+        if use_gpu:
             sol_4d_nn = odeint(rhs_nn, y0=x0.reshape(1,-1).cuda(), t=torch.Tensor(t_eval).cuda())
         else:
             sol_4d_nn = my_solve_ivp( x0.reshape(-1), rhs_nn, t_eval, t_span, settings)
