@@ -12,6 +12,6 @@ module load python3/3.7.0
 module load gcc/9.2.0
 #conda init bash
 #conda activate fno
-srun --ntasks=1 python3 test_run_v4_hpc.py --window 1000 --hpc 1 --known_inits 1 --output_dir l63/test_givenIC_normalizeICs_HYBRID_T10 &
-srun --ntasks=1 python3 test_run_v4_hpc.py --window 500 --hpc 1 --known_inits 1 --output_dir l63/test_givenIC_normalizeICs_HYBRID_T5 &
+srun --ntasks=1 python3 test_run_v4_hpc.py --window 1000 --hpc 1 --known_inits 1 --output_dir test_givenIC_normalizeICs_HYBRID_T10 &
+srun --ntasks=1 python3 test_run_v4_hpc.py --window 500 --hpc 1 --known_inits 1 --output_dir test_givenIC_normalizeICs_HYBRID_T5 &
 wait
