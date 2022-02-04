@@ -17,14 +17,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--hpc', default=0, type=int)
 parser.add_argument('--gpu', default=0, type=int)
 parser.add_argument('--known_inits', default=1, type=int)
+parser.add_argument('--output_dir', default='test_givenIC_normalizeICs', type=str)
 FLAGS = parser.parse_args()
 
-
-
 if FLAGS.hpc:
-    output_dir = '/groups/astuart/mlevine/contRNN/l63/test_givenIC_normalizeICs'
+    base_dir = '/groups/astuart/mlevine/contRNN/l63'
 else:
-    output_dir = 'output/test_givenIC_normalizeICs_TESTING'
+    base_dir = 'output'
+output_dir = os.path.join(base_dir, FLAGS.output_dir)
 
 # load L63 data sampled at dt=0.01
 dt=0.01
