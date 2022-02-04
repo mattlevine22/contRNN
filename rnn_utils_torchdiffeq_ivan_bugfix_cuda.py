@@ -3,6 +3,7 @@ import sys, os
 local_path = './'
 sys.path.append(os.path.join(local_path, 'code/modules'))
 import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -14,7 +15,6 @@ from torchdiffeq import odeint_adjoint, odeint
 from dynamical_models import L63_torch
 from timeit import default_timer
 from pdb import set_trace as bp
-matplotlib.use("Agg")
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
