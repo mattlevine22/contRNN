@@ -34,8 +34,8 @@ X_train = np.load(train_path)
 X_test  = np.load(test_path)
 X_val = X_test
 
-print('!!!!!!!!!!WARNING--using TEST DATA for training because it is bigger for now......!!!!!!!!!!!!!!')
-X_train = X_test
+# print('!!!!!!!!!!WARNING--using TEST DATA for training because it is bigger for now......!!!!!!!!!!!!!!')
+# X_train = X_test
 
 # X_train = X_train[:,1000:5000]
 print('Train shape:',X_train.shape)
@@ -65,7 +65,7 @@ except:
 
 n_train = X_train.shape[1]
 window = 100
-batch_size = 1000
+batch_size = 100
 
 print('N train =', n_train)
 print('batch window =', window)
