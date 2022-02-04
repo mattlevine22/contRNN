@@ -16,6 +16,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--hpc', default=0, type=int)
 parser.add_argument('--gpu', default=0, type=int)
+parser.add_argument('--known_inits', default=1, type=int)
 FLAGS = parser.parse_args()
 
 
@@ -76,7 +77,7 @@ train_model(my_rnn, X_train.T, X_val.T,
             shuffle_train_loader=True, #good run did False
             use_gpu=FLAGS.gpu,
             do_normalization=True,
-            known_inits=True,
+            known_inits=FLAGS.known_inits,
             pre_trained=pre_trained,
             weight_decay=0,
             epochs=10000,
