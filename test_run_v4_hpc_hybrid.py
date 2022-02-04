@@ -21,9 +21,9 @@ FLAGS = parser.parse_args()
 
 
 if FLAGS.hpc:
-    output_dir = '/groups/astuart/mlevine/contRNN/l63/test_givenIC_normalizeICs'
+    output_dir = '/groups/astuart/mlevine/contRNN/l63/test_givenIC_normalizeICs_HYBRID'
 else:
-    output_dir = 'output/test_givenIC_normalizeICs_TESTING'
+    output_dir = 'output/test_givenIC_normalizeICs_TESTING_HYBRID'
 
 # load L63 data sampled at dt=0.01
 dt=0.01
