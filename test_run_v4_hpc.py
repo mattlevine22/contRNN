@@ -16,6 +16,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--hpc', default=0, type=int)
 parser.add_argument('--gpu', default=0, type=int)
+parser.add_argument('--window', default=100, type=int)
 parser.add_argument('--known_inits', default=1, type=int)
 parser.add_argument('--output_dir', default='test_givenIC_normalizeICs', type=str)
 FLAGS = parser.parse_args()
@@ -65,7 +66,7 @@ except:
 
 
 n_train = X_train.shape[1]
-window = 100
+window = FLAGS.window
 batch_size = 100
 
 print('N train =', n_train)
