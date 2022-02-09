@@ -31,17 +31,21 @@ class TimeseriesDataset(Dataset):
 
     def __getitem__(self, index):
         i0 = index*self.window
-        i1 = (index+1)*self.window
+        i1 = (index+1)*self.window + 1 # add 1 so that the endpoint of one window is the start point of the next
         x = self.x[i0:i1, self.target_cols]
         times = self.times[i0:i1]
         if self.known_inits:
             y0 = self.x[i0, 1:] #complement of target_cols
-            return x, times, y0
+            yend = self.x[i1-1, 1:] # get endpoint condition (i.e. IC for next window)
         else:
-            return x, times, index
+            y0 = None
+            yend = None
+
+        return x, times, index, y0, yend
+
 
     def __len__(self):
-        return int(np.floor(len(self.x) / self.window))
+        return int(np.floor(len(self.x) / (self.window + 1))) # including endpoint now
 
     def __getshape__(self):
         return (self.__len__(), *self.__getitem__(0)[0].shape)
@@ -62,6 +66,11 @@ class UnitGaussianNormalizer(object):
     def encode(self, x):
         x = (x - self.mean) / (self.std + self.eps)
         return x
+
+    def encode_derivative(self, x):
+        x /= (self.std + self.eps)
+        return x
+
 
     def decode(self, x, sample_idx=None):
         if sample_idx is None:
@@ -95,6 +104,9 @@ class TrivialNormalizer(object):
     def encode(self, x):
         return x
 
+    def encode_derivative(self, x):
+        return x
+
     def decode(self, x, sample_idx=None):
         return x
 
@@ -107,6 +119,7 @@ class TrivialNormalizer(object):
 
 class Paper_NN(torch.nn.Module):
             def __init__(self,
+                        use_f0=False,
                         dim_x=1,
                         dim_y=2,
                         dim_output=3,
@@ -116,6 +129,7 @@ class Paper_NN(torch.nn.Module):
                 super(Paper_NN, self).__init__()
 
                 # assign parameter dimensions
+                self.use_f0 = use_f0
                 self.dim_x = dim_x
                 self.dim_y = dim_y
                 self.dim_hidden = dim_hidden
@@ -179,8 +193,11 @@ class Paper_NN(torch.nn.Module):
 
             def rhs(self, inp, t=0):
                 '''input dimensions: N x state_dims'''
-                # return self.f0(inp) + self.f_nn(inp)
-                return self.f_nn(inp)
+                foo = self.f_nn(inp)
+                if self.use_f0:
+                    foo += self.x_normalizer.encode_derivative(self.f0(self.x_normalizer.decode(inp)))
+                return  foo
+                # return self.f_nn(inp)
 
             def forward(self, t, x):
                 '''input dimensions: N x state_dims'''
@@ -191,6 +208,7 @@ class Paper_NN(torch.nn.Module):
 def train_model(model,
                 x_train,
                 X_validation,
+                match_endpoints=False,
                 use_gpu=False,
                 known_inits=False,
                 pre_trained=False,
@@ -271,15 +289,18 @@ def train_model(model,
         train_loss = 0
 
         batch = -1
-        for x, times, idx in train_loader:
+        for x, times, idx, y0, yend in train_loader:
             if use_gpu:
-                x , times , idx = x.cuda(), times.cuda(), idx.cuda()
+                x, times  = x.cuda(), times.cuda()
+                if known_inits:
+                    y0, yend = y0.cuda(), yend.cuda()
+
             batch += 1
             optimizer.zero_grad()
 
             # set up data
             if known_inits:
-                u0 = torch.hstack( (x[:,0,:], idx) ) # create full state vector
+                u0 = torch.hstack( (x[:,0,:], y0) ) # create full state vector
             else:
                 u0 = torch.hstack( (x[:,0,:], model.y0[idx]) ) # create full state vector
 
@@ -291,6 +312,9 @@ def train_model(model,
                 with torch.no_grad():
                     u_pred_BEST = odeint(rhs_true, y0=u0.T, t=times[0])
                     loss_LB = myloss(x.squeeze(), u_pred_BEST[:,0,:].squeeze().T).cpu().data.numpy()
+                    if match_endpoints:
+                        end_point_loss = myloss(yend, u_pred_BEST[-1, model.dim_x:, :].T).cpu().data.numpy()
+                        loss_LB += end_point_loss
                     print('Loss of True model (OVERFITTING LB):', loss_LB)
 
             # run forward model
@@ -299,6 +323,11 @@ def train_model(model,
 
             # compute losses
             loss = myloss(x.permute(1,0,2), u_pred[:, :, :model.dim_x])
+
+            if match_endpoints:
+                # last point of traj should match initial condition of next window
+                end_point_loss = myloss(yend, u_pred[-1, :, model.dim_x:])
+                loss += end_point_loss
 
             loss.backward()
 
