@@ -21,6 +21,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--hpc', default=0, type=int)
 parser.add_argument('--do_normalization', default=0, type=int)
+parser.add_argument('--lr', default=1e-1, type=float)
 parser.add_argument('--torchdata', default=0, type=int)
 parser.add_argument('--use_f0', default=1, type=int)
 parser.add_argument('--n_layers', default=2, type=int)
@@ -119,7 +120,7 @@ train_model(my_rnn, X_train.T, X_val.T,
             pre_trained=pre_trained,
             weight_decay=0,
             epochs=FLAGS.epochs,
-            learning_rate=1e-1,
+            learning_rate=FLAGS.lr,
             gamma=1,
             step_size=50,
             batch_size=FLAGS.batch_size,
