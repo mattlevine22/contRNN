@@ -9,6 +9,8 @@ sys.path.append(os.path.join(local_path, 'code/modules'))
 import numpy as np
 # from rnn_utils_copyNbedyn import Paper_NN, train_model, analyze_models
 import torch
+from torchdiffeq import odeint
+from dynamical_models import L63_torch
 from rnn_utils_torchdiffeq_ivan_bugfix_cuda import Paper_NN, train_model
 from pdb import set_trace as bp
 from hpc_utils import dict_to_file
@@ -19,6 +21,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--hpc', default=0, type=int)
 parser.add_argument('--do_normalization', default=0, type=int)
+parser.add_argument('--torchdata', default=0, type=int)
 parser.add_argument('--use_f0', default=1, type=int)
 parser.add_argument('--n_layers', default=2, type=int)
 parser.add_argument('--batch_size', default=100, type=int)
@@ -89,9 +92,18 @@ except:
     logger.info('First time training this model')
 
 
+
+
 n_train = X_train.shape[1]
 window = FLAGS.window
 batch_size = FLAGS.batch_size
+
+if FLAGS.torchdata:
+    dt = 0.01
+    logger.info('Re-writing data with torchdiffeq.odeint solver---should achieve near zero loss w/ perfect model now!')
+    times = torch.FloatTensor(dt*np.arange(n_train))
+    u0 = torch.FloatTensor(X_train[:,0])
+    X_train = odeint(L63_torch, y0=u0.reshape(-1,1), t=times).squeeze().T.data.numpy()
 
 logger.info('N train ='.format(n_train))
 logger.info('Begin RNN training...')
