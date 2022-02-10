@@ -14,10 +14,10 @@ from odelibrary        import *
 from torchdiffeq import odeint_adjoint, odeint
 from dynamical_models import L63_torch
 from timeit import default_timer
+import logging
 from pdb import set_trace as bp
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
 
 class TimeseriesDataset(Dataset):
     def __init__(self, x, times, window, target_cols, known_inits):
@@ -119,6 +119,9 @@ class TrivialNormalizer(object):
 
 class Paper_NN(torch.nn.Module):
             def __init__(self,
+                        logger=None,
+                        n_layers=2,
+                        use_bilinear=False,
                         use_f0=False,
                         dim_x=1,
                         dim_y=2,
@@ -128,7 +131,15 @@ class Paper_NN(torch.nn.Module):
                         activation='relu'):
                 super(Paper_NN, self).__init__()
 
+                if logger is None:
+                    log_fname = os.path.join("NN_logfile.log")
+                    logging.basicConfig(filename=log_fname, level=logging.INFO)
+                    logger = logging.getLogger()
+                self.logger = logger
+
                 # assign parameter dimensions
+                self.n_layers = n_layers
+                self.use_bilinear = use_bilinear
                 self.use_f0 = use_f0
                 self.dim_x = dim_x
                 self.dim_y = dim_y
@@ -143,17 +154,45 @@ class Paper_NN(torch.nn.Module):
                     'gelu': torch.nn.GELU(),
                     'tanh': torch.nn.Tanh()
                 }
-                self.activation                = activation_dict[activation]
-                self.linearCell_in             = torch.nn.Linear(self.dim_x + self.dim_y, self.dim_hidden, bias=True)
-                self.linearCell_out            = torch.nn.Linear(self.dim_hidden, self.dim_output, bias=True)
+                self.activation_fun = activation_dict[activation]
+
+                self.set_model()
 
                 if self.infer_normalizers:
                     self.input_sd              = torch.nn.Parameter(torch.nn.init.normal_(torch.empty(self.dim_input), mean=0.0, std=10))
                     self.input_mean            = torch.nn.Parameter(torch.nn.init.normal_(torch.empty(self.dim_input), mean=0.0, std=10))
-
                     self.output_sd              = torch.nn.Parameter(torch.nn.init.normal_(torch.empty(self.dim_input), mean=0.0, std=100))
 
                 self.print_n_params()
+
+
+            def set_model(self):
+                if self.n_layers==1:
+                    self.dim_hidden = self.dim_output
+
+                self.activations = torch.nn.ModuleList([])
+                self.linears = torch.nn.ModuleList([])
+                self.bilinears = torch.nn.ModuleList([])
+
+                for j in range(self.n_layers): #output of model is a trivial activation (for easy coding)
+                    # first layer
+                    if j==0:
+                        self.activations.append(torch.nn.Identity())
+                        self.linears.append(torch.nn.Linear(self.dim_x + self.dim_y, self.dim_hidden, bias=True)) # first layer
+                        if self.use_bilinear:
+                            self.bilinears.append(torch.nn.Bilinear(self.dim_x + self.dim_y, self.dim_x + self.dim_y, self.dim_hidden, bias=False)) # first layer
+                    elif j < (self.n_layers-1): # internal layers
+                        self.activations.append(self.activation_fun)
+                        self.linears.append(torch.nn.Linear(self.dim_hidden, self.dim_hidden, bias=True)) # interior layers 2...n-1
+                        if self.use_bilinear:
+                            self.bilinears.append(torch.nn.Bilinear(self.dim_hidden, self.dim_hidden, self.dim_hidden, bias=False)) # interior layers 2...n-1
+                    else: # last layer
+                        self.activations.append(self.activation_fun)
+                        self.linears.append(torch.nn.Linear(self.dim_hidden, self.dim_output, bias=True))
+                        if self.use_bilinear:
+                            self.bilinears.append(torch.nn.Bilinear(self.dim_hidden, self.dim_hidden, self.dim_output, bias=False))
+
+                return
 
             def encode(self, x):
                 return (x - self.input_mean) / self.input_sd
@@ -165,7 +204,7 @@ class Paper_NN(torch.nn.Module):
             def print_n_params(self):
                 foo_all = sum(p.numel() for p in self.parameters())
                 foo_tble = sum(p.numel() for p in self.parameters() if p.requires_grad)
-                print('{} total parameters ({} are trainable)'.format(foo_all, foo_tble))
+                self.logger.info('{} total parameters ({} are trainable)'.format(foo_all, foo_tble))
 
             def init_y0(self, N):
                 y_latent = 0*np.random.uniform(low=-0.5, high=0.5, size=(N, self.dim_y))
@@ -173,9 +212,19 @@ class Paper_NN(torch.nn.Module):
 
             def f_nn(self, inp):
                 if self.infer_normalizers:
-                    return self.decode(self.linearCell_out(self.activation(self.linearCell_in(self.encode(inp)))))
-                else:
-                    return self.linearCell_out(self.activation(self.linearCell_in(inp)))
+                    inp = self.encode(inp)
+
+                for l in range(self.n_layers):
+                    inp = self.activations[l](inp)
+                    if self.use_bilinear:
+                        inp = self.linears[l](inp) + 0.01*self.bilinears[l](inp,inp) # easy way to cope with large initialzations of bilinear cells
+                    else:
+                        inp = self.linears[l](inp)
+
+                if self.infer_normalizers:
+                    inp = self.decode(inp)
+
+                return inp
 
             def f0(self, inp, sigma=10):
                 '''takes full [observed, hidden] state vector and returns [observed,hidden] vector.
@@ -208,6 +257,7 @@ class Paper_NN(torch.nn.Module):
 def train_model(model,
                 x_train,
                 X_validation,
+                logger=None,
                 match_endpoints=False,
                 use_gpu=False,
                 known_inits=False,
@@ -235,13 +285,17 @@ def train_model(model,
 
     # make output directory
     os.makedirs(output_dir, exist_ok=True)
+    if logger is None:
+        log_fname = os.path.join(output_dir,"logfile.log")
+        logging.basicConfig(filename=log_fname, level=logging.INFO)
+        logger = logging.getLogger()
 
     # set datasets as torch tensors
     x_train = torch.FloatTensor(x_train)
     x_test = torch.FloatTensor(X_validation)
 
     if do_normalization:
-        print('Doing normalization, go go!')
+        logger.info('Doing normalization, go go!')
         x_normalizer = UnitGaussianNormalizer(x_train)
     else:
         x_normalizer = TrivialNormalizer(x_train)
@@ -315,8 +369,7 @@ def train_model(model,
                     if match_endpoints:
                         end_point_loss = myloss(yend, u_pred_BEST[-1, model.dim_x:, :].T).cpu().data.numpy()
                         loss_LB += end_point_loss
-                    print('Loss of True model (OVERFITTING LB):', loss_LB)
-
+                    logger.info('Loss of True model (OVERFITTING LB): {}'.format(loss_LB))
             # run forward model
             # u_pred = odeint(model, y0=u0, t=times[0])
             u_pred = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=times[0]))
@@ -351,9 +404,7 @@ def train_model(model,
 
         train_loss /= len(train_loader)
         if ep%1==0:
-            linIn_nrm = torch.linalg.norm(model.linearCell_in.weight.cpu().data, ord=2).cpu().data.numpy()
-            linOut_nrm = torch.linalg.norm(model.linearCell_out.weight.cpu().data, ord=2).cpu().data.numpy()
-            print('Epoch', ep, 'Train loss:', train_loss, ', |W_in|_2 = ', linIn_nrm, ', |W_out|_2 = ', linOut_nrm, 'Time per epoch [sec] =', round(default_timer() - t1, 2))
+            logger.info('Epoch {}, Train loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, round(default_timer() - t1, 2)))
             torch.save(model, os.path.join(output_dir, 'rnn.pt'))
 
 
@@ -364,8 +415,8 @@ def train_model(model,
         with torch.no_grad():
             u0 = u_pred[-1,-1,:].cpu().data
 
-            if ep%100==0:# and ep>0:
-                print('solving for IC = ', u0)
+            if ep%100==0 and ep>0:
+                logger.info('solving for IC = {}'.format(u0))
                 t_eval = dt_data*np.arange(0, 5000)
                 # t_span = [t_eval[0], t_eval[-1]]
                 settings= {'method': 'RK45'}
@@ -375,7 +426,7 @@ def train_model(model,
                     else:
                         sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0).reshape(1,-1), t=torch.Tensor(t_eval))).cpu().data.numpy().squeeze()
                 except:
-                    print('Solver failed')
+                    logger.info('Solver failed')
                     continue
 
                 # sol = my_solve_ivp( u0.numpy().reshape(-1), lambda t, y: model.rhs_numpy(y,t), t_eval, t_span, settings)
@@ -393,7 +444,7 @@ def train_model(model,
                     try:
                         test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path)
                     except:
-                        print('Test plots failed')
+                        logger.info('Test plots failed')
                 else:
                     test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path)
             # if ep%2000==0 and ep>0:
@@ -403,7 +454,7 @@ def train_model(model,
             #     try:
             #         sol = odeint(model, y0=u0.reshape(1,-1), t=torch.Tensor(t_eval)).data.numpy().squeeze()
             #     except:
-            #         print('Solver failed')
+            #         logger.info('Solver failed')
             #         continue
             #     # sol = my_solve_ivp( u0.reshape(-1), lambda t, y: model.rhs_numpy(y,t), t_eval, t_span, settings)
             #     fig, axs = plt.subplots(nrows=1, figsize=(20, 10))
@@ -513,12 +564,12 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
 
     ## compute mean of last 10 Times of long timeseries
     n = min(nn_max, int(10 / dt))
-    print('Mean of approx final T=100', np.mean(sol_4d_nn[-n:,:], axis=0))
+    logger.info('Mean of approx final T=100 {}'.format(np.mean(sol_4d_nn[-n:,:], axis=0)))
 
     n = min(true_max, int(10 / dt))
-    print('Mean of true final T=100', np.mean(sol_3d_true[-n:,:], axis=0))
+    logger.info('Mean of true final T=100 {}'.format(np.mean(sol_3d_true[-n:,:], axis=0)))
 
-    print('X_approx(T_end)', sol_4d_nn[-1:,:])
-    print('X_true(T_end)', sol_3d_true[-1:,:])
+    logger.info('X_approx(T_end) {}'.format(sol_4d_nn[-1:,:]))
+    logger.info('X_true(T_end) {}'.format(sol_3d_true[-1:,:]))
 
     return
