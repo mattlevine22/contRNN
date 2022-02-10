@@ -15,11 +15,11 @@ module load gcc/9.2.0
 
 round_dir="run4_bilinears_known_ICs"
 echo "Sending results to $round_dir"
-srun --ntasks=1 python3 test_run_v6_hpc.py --use_f0 0 --do_normalization 1 --batch_size 100 --hpc 1 --known_inits 1 --n_layers 1 --output_dir "$round_dir/bilinear_bs100_Normalized" &
-srun --ntasks=1 python3 test_run_v6_hpc.py --use_f0 0 --do_normalization 0 --batch_size 100 --hpc 1 --known_inits 1 --n_layers 1 --output_dir "$round_dir/bilinear_bs100_notNormalized" &
-srun --ntasks=1 python3 test_run_v6_hpc.py --use_f0 1 --do_normalization 1 --batch_size 100 --hpc 1 --known_inits 1 --n_layers 1 --output_dir "$round_dir/bilinear_bs100_Normalized_hybrid" &
-srun --ntasks=1 python3 test_run_v6_hpc.py --use_f0 1 --do_normalization 0 --batch_size 100 --hpc 1 --known_inits 1 --n_layers 1 --output_dir "$round_dir/bilinear_bs100_notNormalized_hybrid" &
-srun --ntasks=1 python3 test_run_v6_hpc.py --use_f0 0 --do_normalization 0 --batch_size 200 --hpc 1 --known_inits 1 --n_layers 1 --output_dir "$round_dir/bilinear_bs200_notNormalized" &
-srun --ntasks=1 python3 test_run_v6_hpc.py --use_f0 0 --do_normalization 0 --batch_size 300 --hpc 1 --known_inits 1 --n_layers 1 --output_dir "$round_dir/bilinear_bs300_notNormalized" &
-srun --ntasks=1 python3 test_run_v6_hpc.py --use_f0 0 --do_normalization 0 --batch_size 50 --hpc 1 --known_inits 1 --n_layers 1 --output_dir "$round_dir/bilinear_bs50_notNormalized"
+srun --ntasks=1 python3 test_run_v6_hpc.py --use_bilinear 1 --use_f0 0 --do_normalization 1 --batch_size 100 --hpc 1 --known_inits 1 --n_layers 1 --output_dir "$round_dir/bilinear_bs100_Normalized" &
+srun --ntasks=1 python3 test_run_v6_hpc.py --use_bilinear 1 --use_f0 0 --do_normalization 0 --batch_size 100 --hpc 1 --known_inits 1 --n_layers 1 --output_dir "$round_dir/bilinear_bs100_notNormalized" &
+srun --ntasks=1 python3 test_run_v6_hpc.py --use_bilinear 1 --use_f0 1 --do_normalization 1 --batch_size 100 --hpc 1 --known_inits 1 --n_layers 1 --output_dir "$round_dir/bilinear_bs100_Normalized_hybrid" &
+srun --ntasks=1 python3 test_run_v6_hpc.py --use_bilinear 1 --use_f0 1 --do_normalization 0 --batch_size 100 --hpc 1 --known_inits 1 --n_layers 1 --output_dir "$round_dir/bilinear_bs100_notNormalized_hybrid" &
+srun --ntasks=1 python3 test_run_v6_hpc.py --use_bilinear 1 --use_f0 0 --do_normalization 0 --batch_size 200 --hpc 1 --known_inits 1 --n_layers 1 --output_dir "$round_dir/bilinear_bs200_notNormalized" &
+srun --ntasks=1 python3 test_run_v6_hpc.py --use_bilinear 1 --use_f0 0 --do_normalization 0 --batch_size 300 --hpc 1 --known_inits 1 --n_layers 1 --output_dir "$round_dir/bilinear_bs300_notNormalized" &
+srun --ntasks=1 python3 test_run_v6_hpc.py --use_bilinear 1 --use_f0 0 --do_normalization 0 --batch_size 50 --hpc 1 --known_inits 1 --n_layers 1 --output_dir "$round_dir/bilinear_bs50_notNormalized"
 wait
