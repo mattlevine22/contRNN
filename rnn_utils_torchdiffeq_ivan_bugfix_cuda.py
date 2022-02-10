@@ -457,11 +457,11 @@ def train_model(model,
                 # try:
                 if use_gpu:
                     try:
-                        test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path)
+                        test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger)
                     except:
                         logger.info('Test plots failed')
                 else:
-                    test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path)
+                    test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger)
             # if ep%2000==0 and ep>0:
             #     t_eval = dt_data*np.arange(0, 1e6)
             #     # t_span = [t_eval[0], t_eval[-1]]
@@ -487,7 +487,7 @@ def train_model(model,
     return model
 
 
-def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, T_long=5e3, output_path='outputs'):
+def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, T_long=5e3, output_path='outputs', logger=None):
 
     # rhs_nn(t, y)
     # rhs_true(t,y)
