@@ -4,8 +4,7 @@
 
 #SBATCH --time=12:00:00   # walltime
 #SBATCH --ntasks=8   # number of processor cores (i.e. tasks)
-#SBATCH --nodes=8   # number of nodes
-#SBATCH --gres=gpu:8
+#SBATCH --gpus-per-task=1
 #SBATCH --mem-per-cpu=1G   # memory per CPU core
 #SBATCH -J "test0"   # job name
 
