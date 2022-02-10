@@ -30,6 +30,7 @@ parser.add_argument('--gpu', default=0, type=int)
 parser.add_argument('--window', default=100, type=int)
 parser.add_argument('--epochs', default=10000, type=int)
 parser.add_argument('--known_inits', default=1, type=int)
+parser.add_argument('--dt', default=0.01, type=float)
 parser.add_argument('--output_dir', default='default_output', type=str)
 FLAGS = parser.parse_args()
 
@@ -47,7 +48,7 @@ logger = logging.getLogger()
 logger.info('###### BEGIN EXPERIMENT  #########')
 
 # load L63 data sampled at dt=0.01
-dt=0.01
+# dt=0.01
 train_path = os.path.join(local_path,'data/X_train_L63_longer.npy')
 test_path = os.path.join(local_path,'data/X_test_L63.npy')
 
@@ -97,6 +98,7 @@ logger.info('Begin RNN training...')
 logger.warning('WARNING---SHUFFLE IS FALSE FOR NOW.')
 train_model(my_rnn, X_train.T, X_val.T,
             logger=logger,
+            dt_data=FLAGS.dt,
             match_endpoints=FLAGS.match_endpoints,
             shuffle_train_loader=False, #good run did False
             use_gpu=FLAGS.gpu,
