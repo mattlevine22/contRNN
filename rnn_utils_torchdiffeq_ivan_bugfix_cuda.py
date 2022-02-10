@@ -335,6 +335,7 @@ def train_model(model,
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=1.0, steps_per_epoch=len(train_loader), epochs=epochs, verbose=True)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, verbose=True)
 
+    train_loss_history = []
     myloss = torch.nn.MSELoss()
     # torch.autograd.set_detect_anomaly(True)
     for ep in range(epochs):
@@ -403,9 +404,23 @@ def train_model(model,
                     plt.close()
 
         train_loss /= len(train_loader)
+        train_loss_history += [train_loss]
         if ep%1==0:
             logger.info('Epoch {}, Train loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, round(default_timer() - t1, 2)))
             torch.save(model, os.path.join(output_dir, 'rnn.pt'))
+        if ep%100==0:
+            fig, ax = plt.subplots(nrows=1, figsize=(20, 10))
+            ax.plot(train_loss_history)
+            ax.set_title('Train Loss')
+            ax.set_xlabel('Epochs')
+            plt.savefig(os.path.join(output_dir,'training_history'))
+            ax.set_xscale('log')
+            plt.savefig(os.path.join(output_dir,'training_history_xlog'))
+            ax.set_yscale('log')
+            plt.savefig(os.path.join(output_dir,'training_history_xlog_ylog'))
+            ax.set_xscale('linear')
+            plt.savefig(os.path.join(output_dir,'training_history_ylog'))
+            plt.close()
 
 
         scheduler.step(train_loss)
