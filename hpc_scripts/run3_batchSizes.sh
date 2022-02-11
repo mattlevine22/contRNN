@@ -16,6 +16,6 @@ module load gcc/9.2.0
 round_dir="run3_smallerModels_known_ICs"
 echo "Sending results to $round_dir"
 srun --ntasks=1 python3 test_run_v6_hpc.py --window 100 --use_f0 0 --do_normalization 1 --batch_size 50 --hpc 1 --known_inits 1 --dim_hidden 50 --n_layers 2 --activation gelu --output_dir "$round_dir/small_gelu_bs50" &
-srun --ntasks=1 python3 test_run_v6_hpc.py --window 100 --use_f0 0 --do_normalization 1 --batch_size 200 --hpc 1 --known_inits 1 --dim_hidden 50 --n_layers 2 --activation gelu --output_dir "$round_dir/small_gelu_bs200_T2" &
-srun --ntasks=1 python3 test_run_v6_hpc.py --window 100 --use_f0 0 --do_normalization 1 --batch_size 300 --hpc 1 --known_inits 1 --dim_hidden 50 --n_layers 2 --activation gelu --output_dir "$round_dir/small_gelu_bs300_T2"
+srun --ntasks=1 python3 test_run_v6_hpc.py --window 100 --use_f0 0 --do_normalization 1 --batch_size 200 --hpc 1 --known_inits 1 --dim_hidden 50 --n_layers 2 --activation gelu --output_dir "$round_dir/small_gelu_bs200" &
+srun --ntasks=1 python3 test_run_v6_hpc.py --window 100 --use_f0 0 --do_normalization 1 --batch_size 300 --hpc 1 --known_inits 1 --dim_hidden 50 --n_layers 2 --activation gelu --output_dir "$round_dir/small_gelu_bs300"
 wait
