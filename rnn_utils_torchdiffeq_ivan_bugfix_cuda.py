@@ -321,14 +321,17 @@ def train_model(model,
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=bs_test, shuffle=shuffle_test_loader, drop_last=True)
 
     # create initial conditions for each window
-    my_list = ['y_latent']
+    my_list = ['y0']
     if not pre_trained and not known_inits:
         model.init_y0(N=len(train_set))
         ## build optimizer and scheduler
         latent_params = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] in my_list, model.named_parameters()))))
 
     base_params = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] not in my_list, model.named_parameters()))))
-    optimizer = torch.optim.Adam([{'params': base_params, 'weight_decay': weight_decay}], lr=learning_rate, weight_decay=0)
+    # optimizer = torch.optim.Adam([{'params': base_params, 'weight_decay': weight_decay}], lr=learning_rate, weight_decay=0)
+    optimizer = torch.optim.Adam([{'params': base_params, 'weight_decay': weight_decay, 'learning_rate': learning_rate},
+                                    {'params': latent_params, 'weight_decay': 0, 'learning_rate': learning_rate}],
+                                    lr=learning_rate, weight_decay=weight_decay)
 
     # optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
