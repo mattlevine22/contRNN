@@ -38,8 +38,8 @@ class TimeseriesDataset(Dataset):
             y0 = self.x[i0, 1:] #complement of target_cols
             yend = self.x[i1-1, 1:] # get endpoint condition (i.e. IC for next window)
         else:
-            y0 = None
-            yend = None
+            y0 = []
+            yend = []
 
         return x, times, index, y0, yend
 
