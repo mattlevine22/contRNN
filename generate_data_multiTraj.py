@@ -18,7 +18,7 @@ settings= {'method': 'RK45'}
 
 N_traj = 100
 # solver settings
-T = 1e2
+T = 1e1
 dt = 0.01
 t_eval = dt*np.arange(0, int(T/dt))
 t_span = [t_eval[0], t_eval[-1]]
@@ -31,5 +31,5 @@ for _ in range(N_traj):
 X_train = np.array(sol_list).T
 
 
-save_path = os.path.join(local_path,'data/X_train_L63_multi_traj.npy')
+save_path = os.path.join(local_path,'data/X_train_L63_multi_traj_short.npy')
 np.save(save_path, X_train.T)
