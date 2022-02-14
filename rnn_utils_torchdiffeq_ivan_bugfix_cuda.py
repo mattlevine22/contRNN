@@ -21,6 +21,9 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class TimeseriesDataset(Dataset):
     def __init__(self, x, times, window, target_cols, known_inits):
+        '''x is shape T (time) x D (space) x N (trajectories)'''
+
+        self.n_traj = x.shape[2]
         self.x = torch.FloatTensor(x)
         self.known_inits = known_inits
         self.times = torch.FloatTensor(times) # times associated with data x
@@ -30,22 +33,36 @@ class TimeseriesDataset(Dataset):
         self.size = self.__getsize__()
 
     def __getitem__(self, index):
-        i0 = index*self.window
-        i1 = (index+1)*self.window + 1 # add 1 so that the endpoint of one window is the start point of the next
-        x = self.x[i0:i1, self.target_cols]
+        i_traj, i_win = self.get_coord(index)
+
+        i0 = i_win*self.window
+        i1 = (i_win+1)*self.window + 1 # add 1 so that the endpoint of one window is the start point of the next
+        x = self.x[i0:i1, self.target_cols, i_traj] #.squeeze(-1)
         times = self.times[i0:i1]
         if self.known_inits:
-            y0 = self.x[i0, 1:] #complement of target_cols
-            yend = self.x[i1-1, 1:] # get endpoint condition (i.e. IC for next window)
+            y0 = self.x[i0, 1:, i_traj] #.squeeze(-1) #complement of target_cols
+            yend = self.x[i1-1, 1:, i_traj] #.squeeze(-1) # get endpoint condition (i.e. IC for next window)
         else:
             y0 = []
             yend = []
 
-        return x, times, index, y0, yend
+        return x, times, index, i_traj, i_win, y0, yend
 
+    def get_coord(self, index):
+        N = self.len_traj()
+        i_traj = int((index) / N) # select trajectory
+        i_win = index - i_traj*N  # select window number within trajectory
+        return i_traj, i_win
 
     def __len__(self):
-        return int(np.floor(len(self.x) / (self.window + 1))) # including endpoint now
+        '''total number of windows'''
+        return self.x.shape[2] * self.len_traj()
+
+    def len_traj(self):
+        '''computes number of windows per trajectory'''
+        n_win_ics = int(np.floor(len(self.x) / (self.window + 1))) # including endpoint now
+        self.n_win_ics = n_win_ics
+        return n_win_ics
 
     def __getshape__(self):
         return (self.__len__(), *self.__getitem__(0)[0].shape)
@@ -58,9 +75,13 @@ class UnitGaussianNormalizer(object):
     def __init__(self, x, eps=0.00001):
         super(UnitGaussianNormalizer, self).__init__()
 
+        if x.dim()==3:
+            inds = (0,2)
+        else:
+            inds = (0)
         # x could be in shape of ntrain*n or ntrain*T*n or ntrain*n*T
-        self.mean = torch.mean(x, 0)
-        self.std = torch.std(x, 0)
+        self.mean = torch.mean(x, inds).squeeze()
+        self.std = torch.std(x, inds).squeeze()
         self.eps = eps
 
     def encode(self, x):
@@ -206,8 +227,9 @@ class Paper_NN(torch.nn.Module):
                 foo_tble = sum(p.numel() for p in self.parameters() if p.requires_grad)
                 self.logger.info('{} total parameters ({} are trainable)'.format(foo_all, foo_tble))
 
-            def init_y0(self, N):
-                y_latent = 0*np.random.uniform(low=-0.5, high=0.5, size=(N, self.dim_y))
+            def init_y0(self, size):
+                '''size = (N x dim_y) where N = N_traj * N_window_ics'''
+                y_latent = 0*np.random.uniform(low=-0.5, high=0.5, size=size)
                 self.y0 = torch.nn.Parameter(torch.from_numpy(y_latent).float())
 
             def f_nn(self, inp):
@@ -323,7 +345,8 @@ def train_model(model,
     # create initial conditions for each window
     my_list = ['y0']
     if not pre_trained and not known_inits:
-        model.init_y0(N=len(train_set))
+        model.init_y0(size=(train_set.n_traj*train_set.n_win_ics, model.dim_y)) #(N_traj*N_window_ics x dim_y)
+
         ## build optimizer and scheduler
         latent_params = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] in my_list, model.named_parameters()))))
 
@@ -347,7 +370,7 @@ def train_model(model,
         train_loss = 0
 
         batch = -1
-        for x, times, idx, y0, yend in train_loader:
+        for x, times, idx, i_traj, i_win, y0, yend in train_loader:
             if use_gpu:
                 x, times  = x.cuda(), times.cuda()
                 if known_inits:
