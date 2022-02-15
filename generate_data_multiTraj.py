@@ -18,8 +18,9 @@ settings= {'method': 'RK45'}
 
 N_traj = 100
 # solver settings
-T = 1e1
+T = 10
 dt = 0.01
+T += N_traj*dt # extra buffer for last window
 t_eval = dt*np.arange(0, int(T/dt))
 t_span = [t_eval[0], t_eval[-1]]
 

@@ -22,8 +22,11 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 class TimeseriesDataset(Dataset):
     def __init__(self, x, times, window, target_cols, known_inits):
         '''x is shape T (time) x D (space) x N (trajectories)'''
-
+        if x.ndim==2:
+            # backwards compatible with 1-trajectory datasets
+            x = x[:,:,None]
         self.n_traj = x.shape[2]
+        self.n_times = x.shape[0]
         self.x = torch.FloatTensor(x)
         self.known_inits = known_inits
         self.times = torch.FloatTensor(times) # times associated with data x
@@ -60,7 +63,7 @@ class TimeseriesDataset(Dataset):
 
     def len_traj(self):
         '''computes number of windows per trajectory'''
-        n_win_ics = int(np.floor(len(self.x) / (self.window + 1))) # including endpoint now
+        n_win_ics = int( len(self.x) / (self.window+1) )
         self.n_win_ics = n_win_ics
         return n_win_ics
 
@@ -136,6 +139,15 @@ class TrivialNormalizer(object):
 
     def cuda(self):
         return
+
+def get_bs(x, batch_size, window):
+    '''return a usable batch size for a dataset x given desired batch_size and window'''
+    if x.ndim==3:
+        N = x.shape[0] * x.shape[2]
+    else:
+        N = x.shape[0]
+    min_bs = int(N / window)
+    return min(batch_size, min_bs)
 
 
 class Paper_NN(torch.nn.Module):
@@ -334,8 +346,8 @@ def train_model(model,
     test_times = dt_data*np.arange(ntest)
 
     # create train/test loaders for batching
-    bs_train = min(batch_size, int(ntrain/window))
-    bs_test = min(batch_size, int(ntest/window))
+    bs_train = get_bs(x_train, batch_size, window)
+    bs_test = get_bs(x_test, batch_size, window)
 
     train_set = TimeseriesDataset(x_train, train_times, window, obs_inds, known_inits)
     test_set = TimeseriesDataset(x_test, test_times, window, obs_inds, known_inits)
@@ -344,17 +356,16 @@ def train_model(model,
 
     # create initial conditions for each window
     my_list = ['y0']
+    base_params = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] not in my_list, model.named_parameters()))))
+    opt_param_list = [{'params': base_params, 'weight_decay': weight_decay, 'learning_rate': learning_rate}]
     if not pre_trained and not known_inits:
         model.init_y0(size=(train_set.n_traj*train_set.n_win_ics, model.dim_y)) #(N_traj*N_window_ics x dim_y)
-
         ## build optimizer and scheduler
         latent_params = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] in my_list, model.named_parameters()))))
+        opt_param_list.append({'params': latent_params, 'weight_decay': 0, 'learning_rate': learning_rate})
 
-    base_params = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] not in my_list, model.named_parameters()))))
     # optimizer = torch.optim.Adam([{'params': base_params, 'weight_decay': weight_decay}], lr=learning_rate, weight_decay=0)
-    optimizer = torch.optim.Adam([{'params': base_params, 'weight_decay': weight_decay, 'learning_rate': learning_rate},
-                                    {'params': latent_params, 'weight_decay': 0, 'learning_rate': learning_rate}],
-                                    lr=learning_rate, weight_decay=weight_decay)
+    optimizer = torch.optim.Adam(opt_param_list, lr=learning_rate, weight_decay=weight_decay)
 
     # optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
@@ -363,7 +374,6 @@ def train_model(model,
 
     train_loss_history = []
     myloss = torch.nn.MSELoss()
-    # torch.autograd.set_detect_anomaly(True)
     for ep in range(epochs):
         model.train()
         t1 = default_timer()
@@ -488,27 +498,6 @@ def train_model(model,
                         logger.info('Test plots failed')
                 else:
                     test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger)
-            # if ep%2000==0 and ep>0:
-            #     t_eval = dt_data*np.arange(0, 1e6)
-            #     # t_span = [t_eval[0], t_eval[-1]]
-            #     # settings= {'method': 'RK45'}
-            #     try:
-            #         sol = odeint(model, y0=u0.reshape(1,-1), t=torch.Tensor(t_eval)).data.numpy().squeeze()
-            #     except:
-            #         logger.info('Solver failed')
-            #         continue
-            #     # sol = my_solve_ivp( u0.reshape(-1), lambda t, y: model.rhs_numpy(y,t), t_eval, t_span, settings)
-            #     fig, axs = plt.subplots(nrows=1, figsize=(20, 10))
-            #     axs.plot(t_eval[:len(sol)], sol)
-            #     plt.savefig(os.path.join(output_dir,'ContinueTraining_Long_Epoch{}'.format(ep)))
-            #     plt.close()
-            #
-            #     sns.kdeplot(sol[:,0], label='approx')
-            #     sns.kdeplot(x_test[:,0], label='True')
-            #     plt.legend()
-            #     plt.title('L63 first coordinate KDE')
-            #     plt.savefig(os.path.join(output_dir,'ContinueTraining_KDE_Epoch{}'.format(ep)))
-            #     plt.close()
 
     return model
 

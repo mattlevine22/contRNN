@@ -53,7 +53,8 @@ logger.info('###### BEGIN EXPERIMENT  #########')
 
 # load L63 data sampled at dt=0.01
 # dt=0.01
-train_path = os.path.join(local_path,'data/X_train_L63_longer.npy')
+train_path = os.path.join(local_path,'data/X_train_L63_multi_traj_short.npy')
+# train_path = os.path.join(local_path,'data/X_train_L63_longer.npy')
 test_path = os.path.join(local_path,'data/X_test_L63.npy')
 
 X_train = np.load(train_path).T
@@ -105,11 +106,6 @@ if FLAGS.torchdata:
     times = torch.FloatTensor(dt*np.arange(n_train))
     u0 = torch.FloatTensor(X_train[:,0])
     X_train = odeint(L63_torch, y0=u0.reshape(-1,1), t=times).squeeze().T.data.numpy().T
-
-X_train = X_train[:,:,None]
-X_val = X_val[:,:,None]
-
-X_train = np.concatenate( (X_train, X_train), 2)
 
 logger.info('N train ='.format(n_train))
 logger.info('Begin RNN training...')
