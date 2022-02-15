@@ -12,6 +12,7 @@ import torch
 from torch.utils.data import Dataset
 from odelibrary        import *
 from torchdiffeq import odeint_adjoint, odeint
+from plotting_utils import plot_logs
 from dynamical_models import L63_torch
 from timeit import default_timer
 import logging
@@ -360,8 +361,9 @@ def train_model(model,
     my_list = ['y0']
     base_params = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] not in my_list, model.named_parameters()))))
     opt_param_list = [{'params': base_params, 'weight_decay': weight_decay, 'learning_rate': learning_rate}]
-    if not pre_trained and not known_inits:
-        model.init_y0(size=(train_set.n_traj*(train_set.n_win_ics+1), model.dim_y)) #(N_traj*N_window_ics x dim_y) +1 for the endpoint of each trajectory
+    if not known_inits:
+        if not pre_trained:
+            model.init_y0(size=(train_set.n_traj*(train_set.n_win_ics+1), model.dim_y)) #(N_traj*N_window_ics x dim_y) +1 for the endpoint of each trajectory
         ## build optimizer and scheduler
         latent_params = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] in my_list, model.named_parameters()))))
         opt_param_list.append({'params': latent_params, 'weight_decay': 0, 'learning_rate': learning_rate})
@@ -374,9 +376,12 @@ def train_model(model,
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=1.0, steps_per_epoch=len(train_loader), epochs=epochs, verbose=True)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, verbose=True)
 
+    lr_history = {key: [] for key in range(len(optimizer.param_groups))}
     train_loss_history = []
     myloss = torch.nn.MSELoss()
     for ep in range(epochs):
+        for grp in range(len(optimizer.param_groups)):
+            lr_history[grp].append(optimizer.param_groups[grp]['lr'])
         model.train()
         t1 = default_timer()
         train_loss = 0
@@ -441,19 +446,9 @@ def train_model(model,
             logger.info('Epoch {}, Train loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, round(default_timer() - t1, 2)))
             torch.save(model, os.path.join(output_dir, 'rnn.pt'))
         if ep%100==0:
-            fig, ax = plt.subplots(nrows=1, figsize=(20, 10))
-            ax.plot(train_loss_history)
-            ax.set_title('Train Loss')
-            ax.set_xlabel('Epochs')
-            plt.savefig(os.path.join(output_dir,'training_history'))
-            ax.set_xscale('log')
-            plt.savefig(os.path.join(output_dir,'training_history_xlog'))
-            ax.set_yscale('log')
-            plt.savefig(os.path.join(output_dir,'training_history_xlog_ylog'))
-            ax.set_xscale('linear')
-            plt.savefig(os.path.join(output_dir,'training_history_ylog'))
-            plt.close()
-
+            plot_logs(x=train_loss_history, name=os.path.join(output_dir,'training_history'), title='Train Loss', xlabel='Epochs')
+            for grp in lr_history.keys():
+                plot_logs(x=lr_history[grp], name=os.path.join(output_dir,'learning_rates_group{}'.format(grp)), title='Learning Rate Schedule', xlabel='Epochs')
 
         scheduler.step(train_loss)
 

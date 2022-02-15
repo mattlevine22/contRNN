@@ -26,6 +26,20 @@ from scipy.interpolate import interpn
 # sns.set(rc={'text.usetex': True}, font_scale=4)
 from pdb import set_trace as bp
 
+def plot_logs(x, name, title, xlabel):
+    fig, ax = plt.subplots(nrows=1, figsize=(20, 10))
+    ax.plot(x)
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    plt.savefig(name)
+    ax.set_xscale('log')
+    plt.savefig(name+'_xlog')
+    ax.set_yscale('log')
+    plt.savefig(name+'_xlog_ylog')
+    ax.set_xscale('linear')
+    plt.savefig(name+'_ylog')
+    plt.close()
+
 
 def find_collapse(X, times=None, window=5000, true_mean=-0.07, true_sd=7.92):
     N, K = X.shape
