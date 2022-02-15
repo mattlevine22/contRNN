@@ -312,7 +312,8 @@ def train_model(model,
                 step_size=100,
                 gamma=0.5,
                 shuffle_train_loader=False,
-                shuffle_test_loader=False
+                shuffle_test_loader=False,
+                plot_interval=1000,
             ):
 
     # batch_size now refers to the number of windows selected in an epoch
@@ -419,7 +420,7 @@ def train_model(model,
             optimizer.step()
             train_loss += loss.item()
 
-            if ep%1000==0:
+            if ep%plot_interval==0:
                 if batch <=5:
                     b=0
                     K = u_pred.data.shape[-1]
@@ -461,7 +462,7 @@ def train_model(model,
         with torch.no_grad():
             u0 = u_pred[-1,-1,:].cpu().data
 
-            if ep%1000==0 and ep>0:
+            if ep%plot_interval==0 and ep>0:
                 logger.info('solving for IC = {}'.format(u0))
                 t_eval = dt_data*np.arange(0, 5000)
                 # t_span = [t_eval[0], t_eval[-1]]
@@ -482,7 +483,7 @@ def train_model(model,
                 plt.close()
 
                 T_long = 5e4
-                if ep%1000==0 and ep>0:
+                if ep%plot_interval==0 and ep>0:
                     T_long = 5e3
                 f_path = os.path.join(output_dir,'ContinueTraining_Epoch{}'.format(ep))
                 # try:
@@ -517,6 +518,7 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
     if sol_3d_true is None:
         sol_3d_true = my_solve_ivp( x0.reshape(-1), rhs_true, t_eval, t_span, settings)
 
+    K = sol_3d_true.shape[1]
     # solve approximate 3D ODE at initial condition x0
     if nn_normalizer is None:
         if use_gpu:
@@ -533,10 +535,10 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
     ## Plot short term trajectories
     n = min(nn_max, int(10/dt))
     fig, axs = plt.subplots(figsize=(20, 10))
-    plt.plot(t_eval[:n],sol_3d_true[:n,0], label='L63 - 3D')
+    plt.plot(t_eval[:n],sol_3d_true[:n,0], label='True system')
 #     plt.plot(t_eval[:n],sol_4d_true[:n,0], label='L63 - 4D')
-    plt.plot(t_eval[:n],sol_4d_nn[:n,0], label='NN - 3D')
-    plt.title('L63 first coordinate (short-time)')
+    plt.plot(t_eval[:n],sol_4d_nn[:n,0], label='NN system')
+    plt.title('First coordinate (short-time)')
     plt.savefig(os.path.join(output_path, 'trajectory_short'))
     plt.legend()
     plt.close()
@@ -544,7 +546,7 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
     ## Plot medium term trajectories
     n = min(nn_max, int(250/dt))
     fig, axs = plt.subplots(nrows=3, figsize=(20, 10))
-    for k in range(3):
+    for k in range(K):
         axs[k].plot(t_eval[:n],sol_3d_true[:n,k], label='True 3D')
 #         axs[k].plot(t_eval[:n],sol_4d_true[:n,k], label='True 4D')
         axs[k].plot(t_eval[:n],sol_4d_nn[:n,k], label='NN 3D')
@@ -555,7 +557,7 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
 
     ## Plot full-length trajectories
     fig, axs = plt.subplots(nrows=3, figsize=(20, 10))
-    for k in range(3):
+    for k in range(K):
         axs[k].plot(dt*np.arange(len(sol_3d_true)),sol_3d_true[:,k], label='True 3D')
         axs[k].plot(t_eval[:nn_max],sol_4d_nn[:nn_max,k], label='NN 3D')
         axs[k].legend()
@@ -567,11 +569,11 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
     n = len(sol_3d_true) #int(1000/dt)
     n_burnin = int(0.1*n)
     fig, axs = plt.subplots(figsize=(20, 10))
-    sns.kdeplot(sol_3d_true[n_burnin:,0], label='L63 - 3D')
+    sns.kdeplot(sol_3d_true[n_burnin:,0], label='True system')
 #     sns.kdeplot(sol_4d_true[:n,0], label='L63 - 4D')
     n_burnin = int(0.1*nn_max)
-    sns.kdeplot(sol_4d_nn[n_burnin:,0], label='NN - 3D')
-    plt.title('L63 first coordinate KDE (all-time)')
+    sns.kdeplot(sol_4d_nn[n_burnin:,0], label='NN system')
+    plt.title('First coordinate KDE (all-time)')
     plt.legend()
     plt.savefig(os.path.join(output_path, 'inv_long'))
     plt.close()
@@ -579,10 +581,10 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
     ## Plot invariant measure of trajectories for specific time-window (e.g. pre-collapse)
     n = min(nn_max, int(100/dt))
     fig, axs = plt.subplots(figsize=(20, 10))
-    sns.kdeplot(sol_3d_true[:n,0], label='L63 - 3D')
+    sns.kdeplot(sol_3d_true[:n,0], label='True system')
 #     sns.kdeplot(sol_4d_true[:n,0], label='L63 - 4D')
-    sns.kdeplot(sol_4d_nn[:n,0], label='NN - 3D')
-    plt.title('L63 first coordinate KDE (pre-collapse, if any.)')
+    sns.kdeplot(sol_4d_nn[:n,0], label='NN system')
+    plt.title('First coordinate KDE (pre-collapse, if any.)')
     plt.legend()
     plt.savefig(os.path.join(output_path, 'inv_preCollapse'))
     plt.close()
