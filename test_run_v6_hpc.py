@@ -22,6 +22,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--hpc', default=0, type=int)
 parser.add_argument('--do_normalization', default=0, type=int)
 parser.add_argument('--lr', default=1e-1, type=float)
+parser.add_argument('--shuffle', default=0, type=int)
 parser.add_argument('--torchdata', default=0, type=int)
 parser.add_argument('--use_f0', default=1, type=int)
 parser.add_argument('--n_layers', default=2, type=int)
@@ -108,12 +109,11 @@ if FLAGS.torchdata:
 
 logger.info('N train ='.format(n_train))
 logger.info('Begin RNN training...')
-logger.warning('WARNING---SHUFFLE IS FALSE FOR NOW.')
 train_model(my_rnn, X_train.T, X_val.T,
             logger=logger,
             dt_data=FLAGS.dt,
             match_endpoints=FLAGS.match_endpoints,
-            shuffle_train_loader=False, #good run did False
+            shuffle_train_loader=FLAGS.shuffle, #good run did False
             use_gpu=FLAGS.gpu,
             do_normalization=FLAGS.do_normalization,
             known_inits=FLAGS.known_inits,
