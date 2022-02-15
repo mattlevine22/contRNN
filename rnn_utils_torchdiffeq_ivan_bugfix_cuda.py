@@ -422,7 +422,7 @@ def train_model(model,
             optimizer.step()
             train_loss += loss.item()
 
-            if ep%100==0:
+            if ep%1000==0:
                 if batch <=5:
                     b=0
                     K = u_pred.data.shape[-1]
@@ -439,7 +439,7 @@ def train_model(model,
 
         train_loss /= len(train_loader)
         train_loss_history += [train_loss]
-        if ep%1==0:
+        if ep%10==0:
             logger.info('Epoch {}, Train loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, round(default_timer() - t1, 2)))
             torch.save(model, os.path.join(output_dir, 'rnn.pt'))
         if ep%100==0:
@@ -464,7 +464,7 @@ def train_model(model,
         with torch.no_grad():
             u0 = u_pred[-1,-1,:].cpu().data
 
-            if ep%100==0 and ep>0:
+            if ep%1000==0 and ep>0:
                 logger.info('solving for IC = {}'.format(u0))
                 t_eval = dt_data*np.arange(0, 5000)
                 # t_span = [t_eval[0], t_eval[-1]]
@@ -485,7 +485,7 @@ def train_model(model,
                 plt.close()
 
                 T_long = 5e4
-                if ep%100==0 and ep>0:
+                if ep%1000==0 and ep>0:
                     T_long = 5e3
                 f_path = os.path.join(output_dir,'ContinueTraining_Epoch{}'.format(ep))
                 # try:
