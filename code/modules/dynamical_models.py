@@ -2,6 +2,21 @@ from code import *
 import numpy as np
 import torch
 
+def VDP(S,t,mu=1.0):
+    """ Van der Pol Oscillator."""
+    dx = S[0]
+    dy = mu*(1-S[0]**2)* S[1] - S[0]
+    dS = np.array([dx,dy])
+    return dS
+
+def VDP_torch(t,S,mu=1.0):
+    """ Van der Pol Oscillator."""
+    dx = S[0]
+    dy = mu*(1-S[0]**2)* S[1] - S[0]
+    dS = torch.vstack([dx,dy])
+    return dS
+
+
 def Lorenz_63(S,t,sigma=10.0,rho=28.0,beta=8.0/3):
     """ Lorenz-63 dynamical model. """
     x_1 = sigma*(S[1]-S[0]);
