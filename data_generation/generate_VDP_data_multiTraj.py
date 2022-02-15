@@ -36,15 +36,35 @@ for j in range(N_traj):
     plt.savefig(os.path.join(local_path,'data/plots/X_train_VDP_multi_traj_short_{}'.format(j)))
     plt.close()
 
-
 X_train = np.array(sol_list).T
-
-
 save_path = os.path.join(local_path,'data/X_train_VDP_multi_traj_short.npy')
 np.save(save_path, X_train.T)
 
 
-###
+### One long training trajectory
+# solver settings
+T = 1e2
+dt = 0.01
+t_eval = dt*np.arange(0, int(T/dt))
+t_span = [t_eval[0], t_eval[-1]]
+x_warmup = my_solve_ivp( ode.get_inits(), ode.rhs, t_eval, t_span, settings)
+
+u0 = x_warmup[-1]
+T = 1e3
+dt = 0.01
+t_eval = dt*np.arange(0, int(T/dt))
+t_span = [t_eval[0], t_eval[-1]]
+X_train = my_solve_ivp( u0, ode.rhs, t_eval, t_span, settings)
+fig, axs = plt.subplots(nrows=1, figsize=(20, 10))
+axs.plot(t_eval[:len(X_train)], X_train)
+plt.savefig(os.path.join(local_path,'data/plots/X_train_VDP_longer'))
+plt.close()
+
+save_path = os.path.join(local_path,'data/X_train_VDP_longer.npy')
+np.save(save_path, X_train.T)
+
+
+### One long Testing Trajectory
 # solver settings
 T = 1e2
 dt = 0.01
