@@ -4,7 +4,7 @@
 
 #!/usr/bin/env python
 import sys, os
-local_path = './'
+local_path = '../'
 sys.path.append(os.path.join(local_path, 'code/modules'))
 import numpy as np
 # from rnn_utils_copyNbedyn import Paper_NN, train_model, analyze_models
