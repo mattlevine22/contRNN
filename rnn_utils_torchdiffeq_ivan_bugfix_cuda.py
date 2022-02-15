@@ -293,7 +293,7 @@ def train_model(model,
                 x_train,
                 X_validation,
                 logger=None,
-                match_endpoints=False,
+                lambda_endpoints=0,
                 use_gpu=False,
                 known_inits=False,
                 pre_trained=False,
@@ -401,9 +401,8 @@ def train_model(model,
                 with torch.no_grad():
                     u_pred_BEST = odeint(rhs_true, y0=u0.T, t=times[0])
                     loss_LB = myloss(x.squeeze(), u_pred_BEST[:,0,:].squeeze().T).cpu().data.numpy()
-                    if match_endpoints:
-                        end_point_loss = myloss(yend, u_pred_BEST[-1, model.dim_x:, :].T).cpu().data.numpy()
-                        loss_LB += end_point_loss
+                    end_point_loss = lambda_endpoints * myloss(yend, u_pred_BEST[-1, model.dim_x:, :].T).cpu().data.numpy()
+                    loss_LB += end_point_loss
                     logger.info('Loss of True model (OVERFITTING LB): {}'.format(loss_LB))
             # run forward model
             # u_pred = odeint(model, y0=u0, t=times[0])
@@ -411,11 +410,9 @@ def train_model(model,
 
             # compute losses
             loss = myloss(x.permute(1,0,2), u_pred[:, :, :model.dim_x])
-
-            if match_endpoints:
-                # last point of traj should match initial condition of next window
-                end_point_loss = myloss(yend, u_pred[-1, :, model.dim_x:])
-                loss += end_point_loss
+            # last point of traj should match initial condition of next window
+            end_point_loss = lambda_endpoints * myloss(yend, u_pred[-1, :, model.dim_x:])
+            loss += end_point_loss
 
             loss.backward()
 
