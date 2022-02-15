@@ -50,6 +50,152 @@ def my_solve_ivp(ic, f_rhs, t_eval, t_span=None, settings={'method': 'RK45'}, er
         u_sol = sol.y.T
     return np.squeeze(u_sol)
 
+class VDP:
+  """
+  A simple class that implements Van der Pol model
+
+  The class computes RHS's to make use of scipy's ODE solvers.
+
+  Parameters:
+    mu
+
+  """
+
+  def __init__(_s,
+      mu = 1, lGP=10.0, epsGP=1, share_gp=False, add_closure=False, random_closure=False):
+    '''
+    Initialize an instance: setting parameters and xkstar
+    '''
+    _s.share_gp = share_gp
+    _s.mu = mu
+    _s.epsGP = epsGP
+    _s.lGP = lGP
+    _s.K = 1 # state dims
+    _s.hx = 1 # just useful when re-using L96 code
+    _s.slow_only = False
+    _s.exchangeable_states = False
+    _s.add_closure = add_closure
+    _s.random_closure = random_closure
+    _s.has_diverged = False
+
+    if _s.random_closure:
+        _s.add_closure = True
+        _s.set_random_predictor()
+
+  def get_inits(_s):
+    (xmin, xmax) = (-5,5)
+    (ymin, ymax) = (-5,5)
+
+    xrand = xmin+(xmax-xmin)*np.random.random()
+    yrand = ymin+(ymax-ymin)*np.random.random()
+    state_inits = np.array([xrand, yrand])
+    return state_inits
+
+  def get_state_names(_s):
+    return ['x','y']
+
+  def plot_state_indices(_s):
+    return [0,1]
+
+  def slow(_s, y, t):
+    return _s.rhs(y,t)
+
+  def is_divergent(_s, S, t):
+    ''' define kill switch for when integration has blown up'''
+    if not _s.has_diverged:
+        _s.has_diverged = any(np.abs(S) > 2000)
+        if _s.has_diverged:
+            print('INTEGRATION HAS DIVERGED at time {}!!!'.format(t), S)
+    return _s.has_diverged
+
+  def rhs(_s, S, t):
+    ''' Full system RHS '''
+    mu = _s.mu
+    x = S[0]
+    y = S[1]
+
+    # _s.is_divergent(S, t) # check if divergent (dont DO anything though!)
+
+    foo_rhs = np.empty(2)
+    foo_rhs[0] = y
+    foo_rhs[1] = mu * (1 - x**2) * y  -  x
+
+    if _s.add_closure:
+        foo_rhs += (_s.epsGP * _s.simulate(S))
+    return foo_rhs
+
+  def regressed(_s, x, t):
+    ''' Only slow variables with RHS learned from data '''
+    rhs = _s.rhs(x,t)
+    # add data-learned coupling term
+    rhs += _s.simulate(x)
+    return rhs
+
+  def set_stencil(_s, left = 0, right = 0):
+    _s.stencil = np.arange(left, 1 + right)
+
+  def get_state_limits(_s):
+    lims = (None,None)
+    return lims
+
+  def set_predictor(_s, predictor):
+    _s.predictor = predictor
+
+  def set_random_predictor_GP(_s):
+
+    x1 = np.arange(-5, 5, 5)
+    x2 = np.arange(-5, 5, 5)
+    X = np.stack(np.meshgrid(x1, x2), -1).reshape(-1, 2)
+
+    GP_ker = ConstantKernel(1.0, (1e-2, 1e5)) * RBF(_s.lGP, (1e-2, 1e+6))
+    my_gpr = GaussianProcessRegressor(kernel = GP_ker, alpha=0, n_restarts_optimizer=10)
+    y = np.zeros(X.shape)
+    for k in range(_s.K):
+        y[:,k] = np.squeeze(my_gpr.sample_y(X, n_samples=1, random_state=k))
+    my_gpr.fit(X=X, y=y)
+    _s.set_predictor(my_gpr.predict)
+    _s.X = X
+    _s.y = y
+
+    # make a denser grid for evaluating the GP on
+    x1 = np.arange(-5, 5, 1)
+    x2 = np.arange(-5, 5, 1)
+    _s.Xdense = np.stack(np.meshgrid(x1, x2), -1).reshape(-1, 2)
+
+  def set_random_predictor(_s, D=100, lengthscale=1):
+
+    _s.set_predictor(my_gpr.predict)
+    _s.X = X
+    _s.y = y
+
+    # make a denser grid for evaluating the GP on
+    x1 = np.arange(-5, 5, 1)
+    x2 = np.arange(-5, 5, 1)
+    _s.Xdense = np.stack(np.meshgrid(x1, x2), -1).reshape(-1, 2)
+
+
+  def set_null_predictor(_s):
+    _s.predictor = lambda x: 0
+
+  def simulate(_s, slow):
+    if _s.share_gp:
+      return np.reshape(_s.predictor(_s.apply_stencil(slow)), (-1,))
+    else:
+      return np.reshape(_s.predictor(slow.reshape(1,-1)), (-1,))
+
+  def apply_stencil(_s, slow):
+    # behold: the blackest of all black magic!
+    # (in a year, I will not understand what this does)
+    # the idea: shift xk's so that each row corresponds to the stencil:
+    # (x_{k-1}, x_{k}, x_{k+1}), for example,
+    # based on '_s.stencil' and 'slow' array (which is (x1,...,xK) )
+    return slow[np.add.outer(np.arange(_s.K), _s.stencil) % _s.K]
+
+################################################################################
+# end of VDP ##################################################################
+################################################################################
+
+
 
 class LDS_COUPLED_X:
   """
