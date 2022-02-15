@@ -240,7 +240,8 @@ class Paper_NN(torch.nn.Module):
                 self.logger.info('{} total parameters ({} are trainable)'.format(foo_all, foo_tble))
 
             def init_y0(self, size):
-                '''size = (N x dim_y) where N = N_traj * N_window_ics'''
+                '''size = (N x dim_y) where N = N_traj * (N_window_ics+1)'''
+                # note that the final y0 is a free parameter (end of the last window), and only used for consistency when matching endpoints
                 y_latent = 0*np.random.uniform(low=-0.5, high=0.5, size=size)
                 self.y0 = torch.nn.Parameter(torch.from_numpy(y_latent).float())
 
@@ -359,7 +360,7 @@ def train_model(model,
     base_params = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] not in my_list, model.named_parameters()))))
     opt_param_list = [{'params': base_params, 'weight_decay': weight_decay, 'learning_rate': learning_rate}]
     if not pre_trained and not known_inits:
-        model.init_y0(size=(train_set.n_traj*train_set.n_win_ics, model.dim_y)) #(N_traj*N_window_ics x dim_y)
+        model.init_y0(size=(train_set.n_traj*(train_set.n_win_ics+1), model.dim_y)) #(N_traj*N_window_ics x dim_y) +1 for the endpoint of each trajectory
         ## build optimizer and scheduler
         latent_params = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] in my_list, model.named_parameters()))))
         opt_param_list.append({'params': latent_params, 'weight_decay': 0, 'learning_rate': learning_rate})
@@ -381,20 +382,17 @@ def train_model(model,
 
         batch = -1
         for x, times, idx, i_traj, i_win, y0, yend in train_loader:
+            if not known_inits:
+                y0 = model.y0[idx]
+                yend = model.y0[idx+1]
             if use_gpu:
-                x, times  = x.cuda(), times.cuda()
-                if known_inits:
-                    y0, yend = y0.cuda(), yend.cuda()
+                x, times, y0, yend = x.cuda(), times.cuda(), y0.cuda(), yend.cuda()
 
             batch += 1
             optimizer.zero_grad()
 
-            # set up data
-            if known_inits:
-                u0 = torch.hstack( (x[:,0,:], y0) ) # create full state vector
-            else:
-                u0 = torch.hstack( (x[:,0,:], model.y0[idx]) ) # create full state vector
-
+            # set up initial condition
+            u0 = torch.hstack( (x[:,0,:], y0) ) # create full state vector
             if use_gpu:
                 u0 = u0.cuda()
 
