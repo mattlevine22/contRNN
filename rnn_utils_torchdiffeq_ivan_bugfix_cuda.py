@@ -414,7 +414,7 @@ def train_model(model,
             # run forward model
             # u_pred = odeint(model, y0=u0, t=times[0])
             if learn_inits_only:
-                u_pred = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0])).permute(0,2,1)
+                u_pred = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0]).permute(0,2,1))
             else:
                 u_pred = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=times[0]))
 
