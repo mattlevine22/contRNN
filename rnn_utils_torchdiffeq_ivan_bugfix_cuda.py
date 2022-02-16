@@ -43,14 +43,10 @@ class TimeseriesDataset(Dataset):
         i1 = (i_win+1)*self.window + 1 # add 1 so that the endpoint of one window is the start point of the next
         x = self.x[i0:i1, self.target_cols, i_traj] #.squeeze(-1)
         times = self.times[i0:i1]
-        if self.known_inits:
-            y0 = self.x[i0, 1:, i_traj] #.squeeze(-1) #complement of target_cols
-            yend = self.x[i1-1, 1:, i_traj] #.squeeze(-1) # get endpoint condition (i.e. IC for next window)
-        else:
-            y0 = []
-            yend = []
+        y0_TRUE = self.x[i0, 1:, i_traj] #.squeeze(-1) #complement of target_cols
+        yend_TRUE = self.x[i1-1, 1:, i_traj] #.squeeze(-1) # get endpoint condition (i.e. IC for next window)
 
-        return x, times, index, i_traj, i_win, y0, yend
+        return x, times, index, i_traj, i_win, y0_TRUE, yend_TRUE
 
     def get_coord(self, index):
         N = self.len_traj()
@@ -388,8 +384,11 @@ def train_model(model,
         train_loss = 0
 
         batch = -1
-        for x, times, idx, i_traj, i_win, y0, yend in train_loader:
-            if not known_inits:
+        for x, times, idx, i_traj, i_win, y0_TRUE, yend_TRUE in train_loader:
+            if known_inits:
+                y0 = y0_TRUE
+                yend = yend_TRUE
+            else:
                 y0 = model.y0[idx]
                 yend = model.y0[idx+1]
             if use_gpu:
@@ -404,9 +403,10 @@ def train_model(model,
                 u0 = u0.cuda()
 
             # evaluate perfect model
-            if ep==0 and known_inits:
+            if ep==0 and (known_inits or learn_inits_only):
+                u0_TRUE = torch.hstack( (x[:,0,:], y0_TRUE) ) # create full state vector
                 with torch.no_grad():
-                    u_pred_BEST = odeint(rhs_true, y0=u0.T, t=times[0])
+                    u_pred_BEST = odeint(rhs_true, y0=u0_TRUE.T, t=times[0])
                     loss_LB = myloss(x.squeeze(), u_pred_BEST[:,0,:].squeeze().T).cpu().data.numpy()
                     end_point_loss = lambda_endpoints * myloss(yend, u_pred_BEST[-1, model.dim_x:, :].T).cpu().data.numpy()
                     loss_LB += end_point_loss
