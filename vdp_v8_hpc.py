@@ -38,7 +38,7 @@ parser.add_argument('--window', default=100, type=int)
 parser.add_argument('--epochs', default=10000, type=int)
 parser.add_argument('--known_inits', default=1, type=int)
 parser.add_argument('--dt', default=0.01, type=float)
-parser.add_argument('--plot_interval', default=1000, type=float)
+parser.add_argument('--plot_interval', default=1000, type=int)
 parser.add_argument('--output_dir', default='default_output', type=str)
 FLAGS = parser.parse_args()
 

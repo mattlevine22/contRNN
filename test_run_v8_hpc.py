@@ -24,8 +24,9 @@ parser.add_argument('--do_normalization', default=0, type=int)
 parser.add_argument('--lr', default=1e-1, type=float)
 parser.add_argument('--shuffle', default=0, type=int)
 parser.add_argument('--multi_traj', default=0, type=int)
+parser.add_argument('--learn_inits_only', default=0, type=int)
 # parser.add_argument('--torchdata', default=0, type=int)
-parser.add_argument('--use_f0', default=1, type=int)
+parser.add_argument('--use_f0', default=0, type=int)
 parser.add_argument('--n_layers', default=2, type=int)
 parser.add_argument('--batch_size', default=100, type=int)
 parser.add_argument('--dim_hidden', default=50, type=int)
@@ -37,6 +38,7 @@ parser.add_argument('--window', default=100, type=int)
 parser.add_argument('--epochs', default=10000, type=int)
 parser.add_argument('--known_inits', default=1, type=int)
 parser.add_argument('--dt', default=0.01, type=float)
+parser.add_argument('--plot_interval', default=1000, type=int)
 parser.add_argument('--output_dir', default='default_output', type=str)
 FLAGS = parser.parse_args()
 
@@ -118,6 +120,7 @@ train_model(my_rnn, X_train.T, X_val.T,
             use_gpu=FLAGS.gpu,
             do_normalization=FLAGS.do_normalization,
             known_inits=FLAGS.known_inits,
+            learn_inits_only=FLAGS.learn_inits_only,
             pre_trained=pre_trained,
             weight_decay=0,
             epochs=FLAGS.epochs,
@@ -126,4 +129,5 @@ train_model(my_rnn, X_train.T, X_val.T,
             step_size=50,
             batch_size=FLAGS.batch_size,
             window=FLAGS.window,
+            plot_interval=FLAGS.plot_interval,
             output_dir=output_dir)

@@ -297,6 +297,7 @@ def train_model(model,
                 lambda_endpoints=0,
                 use_gpu=False,
                 known_inits=False,
+                learn_inits_only=False,
                 pre_trained=False,
                 do_normalization=False,
                 output_dir='output',
@@ -412,7 +413,10 @@ def train_model(model,
                     logger.info('Loss of True model (OVERFITTING LB): {}'.format(loss_LB))
             # run forward model
             # u_pred = odeint(model, y0=u0, t=times[0])
-            u_pred = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=times[0]))
+            if learn_inits_only:
+                u_pred = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0])).permute(0,2,1)
+            else:
+                u_pred = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=times[0]))
 
             # compute losses
             loss = myloss(x.permute(1,0,2), u_pred[:, :, :model.dim_x])
@@ -457,7 +461,7 @@ def train_model(model,
         with torch.no_grad():
             u0 = u_pred[-1,-1,:].cpu().data
 
-            if ep%plot_interval==0 and ep>0:
+            if ep%plot_interval==0 and ep>0 and not learn_inits_only:
                 logger.info('solving for IC = {}'.format(u0))
                 t_eval = dt_data*np.arange(0, 5000)
                 # t_span = [t_eval[0], t_eval[-1]]
