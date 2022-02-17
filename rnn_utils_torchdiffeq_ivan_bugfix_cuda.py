@@ -224,6 +224,25 @@ class Paper_NN(torch.nn.Module):
 
                 return
 
+            def compute_grad_norm(self):
+                '''Compute the norm of the gradients per layer.'''
+                grad_norm = {}
+                for l in range(self.n_layers):
+                    layer_norm = 0
+                    layer_norm += self.linears[l].weight.grad.detach().data.norm(2).item()**2
+                    layer_norm += self.linears[l].bias.grad.detach().data.norm(2).item()**2
+                    if self.use_bilinear:
+                        layer_norm += self.bilinears[l].weight.grad.detach().data.norm(2).item()**2
+                        layer_norm += self.bilinears[l].bias.grad.detach().data.norm(2).item()**2
+                    grad_norm[l] = layer_norm ** 0.5
+
+                try:
+                    grad_norm['y0'] = self.y0.grad.detach().data.norm(2).item()
+                except:
+                    pass
+
+                return np.array(list(grad_norm.values()))
+
             def encode(self, x):
                 return (x - self.input_mean) / self.input_sd
 
@@ -325,6 +344,12 @@ def train_model(model,
         logging.basicConfig(filename=log_fname, level=logging.INFO)
         logger = logging.getLogger()
 
+    summary_dir = os.path.join(output_dir,'summary')
+    os.makedirs(summary_dir, exist_ok=True)
+
+    plot_dir = os.path.join(output_dir,'plots')
+    os.makedirs(plot_dir, exist_ok=True)
+
     # set datasets as torch tensors
     x_train = torch.FloatTensor(x_train)
     x_test = torch.FloatTensor(X_validation)
@@ -377,6 +402,7 @@ def train_model(model,
     lr_history = {key: [] for key in range(len(optimizer.param_groups))}
     train_loss_history = []
     train_loss_mse_history = []
+    grad_norm_history = []
     myloss = torch.nn.MSELoss()
     for ep in range(epochs):
         for grp in range(len(optimizer.param_groups)):
@@ -385,6 +411,7 @@ def train_model(model,
         t1 = default_timer()
         train_loss = 0
         train_loss_mse = 0
+        grad_norm = 0
 
         batch = -1
         for x, times, idx, i_traj, i_win, y0_TRUE, yend_TRUE in train_loader:
@@ -433,6 +460,9 @@ def train_model(model,
             optimizer.step()
             train_loss += loss.item()
 
+            # compute gradient norms for monitoring
+            grad_norm += model.compute_grad_norm()
+
             if ep%plot_interval==0:
                 if batch <=5:
                     b=0
@@ -445,7 +475,7 @@ def train_model(model,
                         except:
                             pass
                         axs[k].legend()
-                    plt.savefig(os.path.join(output_dir,'TrainPlot_Epoch{}_Batch{}'.format(ep,batch)))
+                    plt.savefig(os.path.join(plot_dir,'TrainPlot_Epoch{}_Batch{}'.format(ep,batch)))
                     plt.close()
 
         # regularized loss
@@ -455,15 +485,20 @@ def train_model(model,
         # unregularized loss
         train_loss_mse /= len(train_loader)
         train_loss_mse_history += [train_loss_mse]
+
+        # grad norms
+        grad_norm /= len(train_loader)
+        grad_norm_history += [grad_norm]
         if ep%10==0:
             logger.info('Epoch {}, Train loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, round(default_timer() - t1, 2)))
             torch.save(model, os.path.join(output_dir, 'rnn.pt'))
         if ep%100==0:
-            plot_logs(x=train_loss_history, name=os.path.join(output_dir,'training_history'), title='Train Loss', xlabel='Epochs')
-            plot_logs(x=train_loss_mse_history, name=os.path.join(output_dir,'training_mse_history'), title='Train Loss MSE', xlabel='Epochs')
+            plot_logs(x=train_loss_history, name=os.path.join(summary_dir,'training_history'), title='Train Loss', xlabel='Epochs')
+            plot_logs(x=train_loss_mse_history, name=os.path.join(summary_dir,'training_mse_history'), title='Train Loss MSE', xlabel='Epochs')
             for grp in lr_history.keys():
-                plot_logs(x=lr_history[grp], name=os.path.join(output_dir,'learning_rates_group{}'.format(grp)), title='Learning Rate Schedule', xlabel='Epochs')
-
+                plot_logs(x=lr_history[grp], name=os.path.join(summary_dir,'learning_rates_group{}'.format(grp)), title='Learning Rate Schedule', xlabel='Epochs')
+            for l in range(len(grad_norm)):
+                plot_logs(x=np.array(grad_norm_history)[:,l], name=os.path.join(summary_dir,'grad_norm_layer{}'.format(l)), title='Gradient Norms', xlabel='Epochs')
         scheduler.step(train_loss)
 
         # validate by running off-data and predicting ahead
@@ -488,13 +523,13 @@ def train_model(model,
                 # sol = my_solve_ivp( u0.numpy().reshape(-1), lambda t, y: model.rhs_numpy(y,t), t_eval, t_span, settings)
                 fig, axs = plt.subplots(nrows=1, figsize=(20, 10))
                 axs.plot(t_eval[:len(sol)], sol)
-                plt.savefig(os.path.join(output_dir,'ContinueTraining_Short_Epoch{}'.format(ep)))
+                plt.savefig(os.path.join(plot_dir,'ContinueTraining_Short_Epoch{}'.format(ep)))
                 plt.close()
 
                 T_long = 5e4
                 if ep%plot_interval==0 and ep>0:
                     T_long = 5e3
-                f_path = os.path.join(output_dir,'ContinueTraining_Epoch{}'.format(ep))
+                f_path = os.path.join(plot_dir,'ContinueTraining_Epoch{}'.format(ep))
                 # try:
                 if use_gpu:
                     try:
