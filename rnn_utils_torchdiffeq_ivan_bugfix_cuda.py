@@ -376,6 +376,7 @@ def train_model(model,
 
     lr_history = {key: [] for key in range(len(optimizer.param_groups))}
     train_loss_history = []
+    train_loss_mse_history = []
     myloss = torch.nn.MSELoss()
     for ep in range(epochs):
         for grp in range(len(optimizer.param_groups)):
@@ -383,6 +384,7 @@ def train_model(model,
         model.train()
         t1 = default_timer()
         train_loss = 0
+        train_loss_mse = 0
 
         batch = -1
         for x, times, idx, i_traj, i_win, y0_TRUE, yend_TRUE in train_loader:
@@ -421,6 +423,7 @@ def train_model(model,
 
             # compute losses
             loss = myloss(x.permute(1,0,2), u_pred[:, :, :model.dim_x])
+            train_loss_mse += loss.item()
             # last point of traj should match initial condition of next window
             end_point_loss = lambda_endpoints * myloss(yend, u_pred[-1, :, model.dim_x:])
             loss += end_point_loss
@@ -445,13 +448,19 @@ def train_model(model,
                     plt.savefig(os.path.join(output_dir,'TrainPlot_Epoch{}_Batch{}'.format(ep,batch)))
                     plt.close()
 
+        # regularized loss
         train_loss /= len(train_loader)
         train_loss_history += [train_loss]
+
+        # unregularized loss
+        train_loss_mse /= len(train_loader)
+        train_loss_mse_history += [train_loss_mse]
         if ep%10==0:
             logger.info('Epoch {}, Train loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, round(default_timer() - t1, 2)))
             torch.save(model, os.path.join(output_dir, 'rnn.pt'))
         if ep%100==0:
             plot_logs(x=train_loss_history, name=os.path.join(output_dir,'training_history'), title='Train Loss', xlabel='Epochs')
+            plot_logs(x=train_loss_mse_history, name=os.path.join(output_dir,'training_mse_history'), title='Train Loss MSE', xlabel='Epochs')
             for grp in lr_history.keys():
                 plot_logs(x=lr_history[grp], name=os.path.join(output_dir,'learning_rates_group{}'.format(grp)), title='Learning Rate Schedule', xlabel='Epochs')
 
