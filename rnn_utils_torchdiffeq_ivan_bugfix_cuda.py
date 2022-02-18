@@ -422,7 +422,7 @@ def train_model(model,
                 y0 = model.y0[idx]
                 yend = model.y0[idx+1]
             if use_gpu:
-                x, times, y0, yend = x.cuda(), times.cuda(), y0.cuda(), yend.cuda()
+                x, times, y0, yend, y0_TRUE, yend_TRUE = x.cuda(), times.cuda(), y0.cuda(), yend.cuda(), y0_TRUE.cuda(), yend_TRUE.cuda()
 
             batch += 1
             optimizer.zero_grad()
