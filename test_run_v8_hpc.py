@@ -26,6 +26,7 @@ parser.add_argument('--min_lr', default=0, type=float)
 parser.add_argument('--shuffle', default=0, type=int)
 parser.add_argument('--multi_traj', default=0, type=int)
 parser.add_argument('--learn_inits_only', default=0, type=int)
+parser.add_argument('--infer_ic', default=1, type=int)
 # parser.add_argument('--torchdata', default=0, type=int)
 parser.add_argument('--use_f0', default=0, type=int)
 parser.add_argument('--n_layers', default=2, type=int)
@@ -36,6 +37,7 @@ parser.add_argument('--use_bilinear', default=0, type=int)
 parser.add_argument('--lambda_endpoints', default=0, type=float)
 parser.add_argument('--gpu', default=0, type=int)
 parser.add_argument('--window', default=100, type=int)
+parser.add_argument('--warmup', default=0, type=int)
 parser.add_argument('--epochs', default=10000, type=int)
 parser.add_argument('--known_inits', default=1, type=int)
 parser.add_argument('--dt', default=0.01, type=float)
@@ -80,6 +82,7 @@ my_rnn = Paper_NN(
                     logger=logger,
                     use_f0=FLAGS.use_f0,
                     infer_normalizers=False,
+                    infer_ic=FLAGS.infer_ic,
                     n_layers=FLAGS.n_layers,
                     use_bilinear=FLAGS.use_bilinear,
                     dim_x=1,
@@ -131,5 +134,6 @@ train_model(my_rnn, X_train.T, X_val.T,
             step_size=50,
             batch_size=FLAGS.batch_size,
             window=FLAGS.window,
+            n_warmup=FLAGS.warmup,
             plot_interval=FLAGS.plot_interval,
             output_dir=output_dir)
