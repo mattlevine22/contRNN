@@ -23,6 +23,7 @@ parser.add_argument('--hpc', default=0, type=int)
 parser.add_argument('--do_normalization', default=0, type=int)
 parser.add_argument('--lr', default=1e-1, type=float)
 parser.add_argument('--min_lr', default=0, type=float)
+parser.add_argument('--patience', default=10, type=int)
 parser.add_argument('--shuffle', default=0, type=int)
 parser.add_argument('--multi_traj', default=0, type=int)
 parser.add_argument('--learn_inits_only', default=0, type=int)
@@ -130,6 +131,7 @@ train_model(my_rnn, X_train.T, X_val.T,
             epochs=FLAGS.epochs,
             learning_rate=FLAGS.lr,
             min_lr=FLAGS.min_lr,
+            patience=FLAGS.patience,
             gamma=1,
             step_size=50,
             batch_size=FLAGS.batch_size,

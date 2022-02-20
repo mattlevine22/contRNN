@@ -333,6 +333,7 @@ def train_model(model,
                 step_size=100,
                 gamma=0.5,
                 min_lr=0,
+                patience=10,
                 shuffle_train_loader=False,
                 shuffle_test_loader=False,
                 plot_interval=1000,
@@ -401,7 +402,7 @@ def train_model(model,
     # optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=1.0, steps_per_epoch=len(train_loader), epochs=epochs, verbose=True)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, verbose=True, min_lr=min_lr)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, verbose=True, min_lr=min_lr, patience=patience)
 
     lr_history = {key: [] for key in range(len(optimizer.param_groups))}
     train_loss_history = []
