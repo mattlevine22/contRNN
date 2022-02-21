@@ -6,7 +6,7 @@
 #SBATCH --ntasks=10   # number of processor cores (i.e. tasks)
 #SBATCH --gpus-per-task=1
 #SBATCH --mem-per-cpu=1G   # memory per CPU core
-#SBATCH -J "test0"   # job name
+#SBATCH -J "sweep_grad_norm_clip"   # job name
 
 module load python3/3.7.0
 module load gcc/9.2.0
