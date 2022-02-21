@@ -38,23 +38,21 @@ class TimeseriesDataset(Dataset):
         self.size = self.__getsize__()
 
     def __getitem__(self, index):
-        i_traj, i_win = self.get_coord(index)
-
-        i0 = i_win*self.window
-        i1 = (i_win+1)*self.window + 1 # add 1 so that the endpoint of one window is the start point of the next
+        i_traj, i0 = self.get_coord(index)
+        i1 = i0 + self.window
         x = self.x[i0:i1, self.target_cols, i_traj] #.squeeze(-1)
         times = self.times[i0 + self.n_warmup : i1]
         times_all = self.times[i0:i1]
         y0_TRUE = self.x[i0, 1:, i_traj] #.squeeze(-1) #complement of target_cols
         yend_TRUE = self.x[i1-1, 1:, i_traj] #.squeeze(-1) # get endpoint condition (i.e. IC for next window)
 
-        return x, times, times_all, index, i_traj, i_win, y0_TRUE, yend_TRUE
+        return x, times, times_all, index, i_traj, y0_TRUE, yend_TRUE
 
     def get_coord(self, index):
         N = self.len_traj()
-        i_traj = int((index) / N) # select trajectory
-        i_win = index - i_traj*N  # select window number within trajectory
-        return i_traj, i_win
+        i_traj = int( index / N ) # select trajectory
+        i0 = index - i_traj*N  # select window number within trajectory
+        return i_traj, i0
 
     def __len__(self):
         '''total number of windows'''
@@ -62,7 +60,7 @@ class TimeseriesDataset(Dataset):
 
     def len_traj(self):
         '''computes number of windows per trajectory'''
-        n_win_ics = int( len(self.x) / (self.window+1) )
+        n_win_ics = int(  len(self.x) - self.window + 1  )
         self.n_win_ics = n_win_ics
         return n_win_ics
 
@@ -420,7 +418,7 @@ def train_model(model,
         grad_norm = 0
 
         batch = -1
-        for x, times, times_all, idx, i_traj, i_win, y0_TRUE, yend_TRUE in train_loader:
+        for x, times, times_all, idx, i_traj, y0_TRUE, yend_TRUE in train_loader:
             if known_inits:
                 y0 = y0_TRUE
                 yend = yend_TRUE
