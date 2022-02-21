@@ -334,6 +334,7 @@ def train_model(model,
                 gamma=0.5,
                 min_lr=0,
                 patience=10,
+                max_grad_norm=0,
                 shuffle_train_loader=False,
                 shuffle_test_loader=False,
                 plot_interval=1000,
@@ -470,6 +471,10 @@ def train_model(model,
             loss += end_point_loss
 
             loss.backward()
+
+            # clip gradient norm
+            if max_grad_norm > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_grad_norm)
 
             optimizer.step()
             train_loss += loss.item()
