@@ -509,7 +509,7 @@ def train_model(model,
         if ep%10==0:
             logger.info('Epoch {}, Train loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, round(default_timer() - t1, 2)))
             torch.save(model, os.path.join(output_dir, 'rnn.pt'))
-        if ep%100==0:
+        # if ep%100==0:
             plot_logs(x=train_loss_history, name=os.path.join(summary_dir,'training_history'), title='Train Loss', xlabel='Epochs')
             plot_logs(x=train_loss_mse_history, name=os.path.join(summary_dir,'training_mse_history'), title='Train Loss MSE', xlabel='Epochs')
             for grp in lr_history.keys():
