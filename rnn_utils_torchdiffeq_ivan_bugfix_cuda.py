@@ -270,7 +270,7 @@ class Paper_NN(torch.nn.Module):
                 for l in range(self.n_layers):
                     inp = self.activations[l](inp)
                     if self.use_bilinear:
-                        inp = self.linears[l](inp) + 0.01*self.bilinears[l](inp,inp) # easy way to cope with large initialzations of bilinear cells
+                        inp = self.linears[l](inp) + self.bilinears[l](inp,inp) # easy way to cope with large initialzations of bilinear cells
                     else:
                         inp = self.linears[l](inp)
 
