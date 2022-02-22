@@ -550,14 +550,14 @@ def train_model(model,
                 f_path = os.path.join(plot_dir,'ContinueTraining_Epoch{}'.format(ep))
                 # try:
                 if use_gpu:
-                    test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger)
+                    test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger, use_gpu=use_gpu)
                 else:
-                    test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger)
+                    test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger, use_gpu=use_gpu)
 
     return model
 
 
-def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, T_long=5e3, output_path='outputs', logger=None):
+def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, T_long=5e3, output_path='outputs', logger=None, use_gpu=False):
 
     # rhs_nn(t, y)
     # rhs_true(t,y)
