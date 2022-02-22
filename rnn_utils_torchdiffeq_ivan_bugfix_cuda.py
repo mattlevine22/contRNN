@@ -338,7 +338,7 @@ def train_model(model,
                 plot_interval=1000,
             ):
 
-    fast_plot_interval = min(1, int(plot_interval / 10))
+    fast_plot_interval = max(1, int(plot_interval / 10))
     # batch_size now refers to the number of windows selected in an epoch
     # window refers to the size of a given window
 
