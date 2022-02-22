@@ -568,7 +568,6 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
     os.makedirs(output_path, exist_ok=True)
 
     # solver settings
-    bp()
     dt = 0.01
     t_eval = dt*np.arange(0, int(T_long/dt))
     t_span = [t_eval[0], t_eval[-1]]
