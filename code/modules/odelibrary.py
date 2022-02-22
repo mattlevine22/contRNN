@@ -30,8 +30,8 @@ def my_solve_ivp(ic, f_rhs, t_eval, t_span=None, settings={'method': 'RK45'}, er
     if t_span is None:
         t_span = [t_eval[0], t_eval[-1]]
 
-    u0 = np.copy(ic)
     if settings['method']=='Euler':
+        u0 = np.copy(ic)
         dt = settings['dt']
         u_sol = np.zeros((len(t_eval), len(ic)))
         u_sol[0] = u0
@@ -42,9 +42,9 @@ def my_solve_ivp(ic, f_rhs, t_eval, t_span=None, settings={'method': 'RK45'}, er
             u_sol[i] = u0
     else:
         try:
-            sol = solve_ivp(fun=lambda t, y: f_rhs(y, t), t_span=t_span, y0=u0, t_eval=t_eval, **settings)
+            sol = solve_ivp(fun=lambda t, y: f_rhs(y, t), t_span=t_span, y0=ic, t_eval=t_eval, **settings)
         except:
-            sol = solve_ivp(fun=f_rhs, t_span=t_span, y0=u0, t_eval=t_eval, **settings)
+            sol = solve_ivp(fun=f_rhs, t_span=t_span, y0=ic, t_eval=t_eval, **settings)
             if not sol.success and error_if_failed:
                 raise Exception(sol.message)
         u_sol = sol.y.T

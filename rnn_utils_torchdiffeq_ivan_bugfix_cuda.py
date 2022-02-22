@@ -506,7 +506,7 @@ def train_model(model,
         # grad norms
         grad_norm /= len(train_loader)
         grad_norm_history += [grad_norm]
-        if ep%10==0:
+        if ep%int(plot_interval/10)==0:
             logger.info('Epoch {}, Train loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, round(default_timer() - t1, 2)))
             torch.save(model, os.path.join(output_dir, 'rnn.pt'))
         # if ep%100==0:
@@ -584,7 +584,10 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
         else:
             sol_4d_nn = my_solve_ivp( x0.reshape(-1), rhs_nn, t_eval, t_span, settings)
     else:
-        sol_4d_nn = my_solve_ivp( nn_normalizer.encode(x0).reshape(-1), rhs_nn, t_eval, t_span, settings)
+        if use_gpu:
+            sol_4d_nn = odeint(rhs_nn, y0=nn_normalizer.encode(x0).reshape(-1).cuda(), t=torch.Tensor(t_eval).cuda())
+        else:
+            sol_4d_nn = my_solve_ivp( nn_normalizer.encode(x0).reshape(-1), rhs_nn, t_eval, t_span, settings)
         sol_4d_nn = nn_normalizer.decode(torch.FloatTensor(sol_4d_nn)).cpu().data.numpy()
 
     nn_max = len(sol_4d_nn)
