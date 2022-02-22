@@ -524,7 +524,8 @@ def train_model(model,
         with torch.no_grad():
             u0 = u_pred[-1,-1,:].cpu().data
 
-            if ep%plot_interval==0 and ep>0 and not learn_inits_only:
+            # if ep%plot_interval==0 and ep>0 and not learn_inits_only:
+            if ep%plot_interval==0 and not learn_inits_only:
                 logger.info('solving for IC = {}'.format(u0))
                 t_eval = dt_data*np.arange(0, 5000)
                 # t_span = [t_eval[0], t_eval[-1]]
