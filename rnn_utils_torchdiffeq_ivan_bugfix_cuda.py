@@ -338,6 +338,7 @@ def train_model(model,
                 plot_interval=1000,
             ):
 
+    fast_plot_interval = min(1, int(plot_interval / 10))
     # batch_size now refers to the number of windows selected in an epoch
     # window refers to the size of a given window
 
@@ -506,7 +507,7 @@ def train_model(model,
         # grad norms
         grad_norm /= len(train_loader)
         grad_norm_history += [grad_norm]
-        if ep%int(plot_interval/10)==0:
+        if ep%fast_plot_interval==0:
             logger.info('Epoch {}, Train loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, round(default_timer() - t1, 2)))
             torch.save(model, os.path.join(output_dir, 'rnn.pt'))
         # if ep%100==0:
