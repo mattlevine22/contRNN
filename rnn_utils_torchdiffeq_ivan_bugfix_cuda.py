@@ -567,6 +567,7 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
 
     os.makedirs(output_path, exist_ok=True)
 
+    bp()
     # solver settings
     dt = 0.01
     t_eval = dt*np.arange(0, int(T_long/dt))
@@ -590,6 +591,7 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
             sol_4d_nn = odeint(rhs_nn, y0=nn_normalizer.encode(x0).reshape(-1).cuda(), t=torch.Tensor(t_eval).cuda())
         else:
             sol_4d_nn = my_solve_ivp( nn_normalizer.encode(x0).reshape(-1), rhs_nn, t_eval, t_span, settings)
+        bp()
         sol_4d_nn = nn_normalizer.decode(torch.FloatTensor(sol_4d_nn)).cpu().data.numpy()
 
     nn_max = len(sol_4d_nn)
