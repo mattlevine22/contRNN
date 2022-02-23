@@ -2,11 +2,11 @@
 
 #Submit this script with: sbatch thefilename
 
-#SBATCH --time=24:00:00   # walltime
-#SBATCH --ntasks=4   # number of processor cores (i.e. tasks)
+#SBATCH --time=72:00:00   # walltime
+#SBATCH --ntasks=10   # number of processor cores (i.e. tasks)
 #SBATCH --gpus-per-task=1
 #SBATCH --mem-per-cpu=1G   # memory per CPU core
-#SBATCH -J "v3batchSizes_moreWins"   # job name
+#SBATCH -J "patience4"   # job name
 
 module load python3/3.7.0
 module load gcc/9.2.0
