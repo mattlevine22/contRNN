@@ -547,6 +547,7 @@ def train_model(model,
                 T_long = 5e4
                 if ep%plot_interval==0 and ep>0:
                     T_long = 5e3
+
                 f_path = os.path.join(plot_dir,'ContinueTraining_Epoch{}'.format(ep))
                 # try:
                 if use_gpu:
@@ -586,7 +587,7 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
             sol_4d_nn = torch.FloatTensor(my_solve_ivp( x0.reshape(-1), rhs_nn, t_eval, t_span, settings))
     else:
         if use_gpu:
-            sol_4d_nn = odeint(rhs_nn, y0=nn_normalizer.encode(x0).reshape(-1).cuda(), t=torch.Tensor(t_eval).cuda())
+            sol_4d_nn = odeint(rhs_nn, y0=nn_normalizer.encode(x0).reshape(1,-1).cuda(), t=torch.Tensor(t_eval).cuda())
         else:
             sol_4d_nn = torch.FloatTensor(my_solve_ivp( nn_normalizer.encode(x0).reshape(-1), rhs_nn, t_eval, t_span, settings))
         sol_4d_nn = nn_normalizer.decode(sol_4d_nn).cpu().data.numpy()
