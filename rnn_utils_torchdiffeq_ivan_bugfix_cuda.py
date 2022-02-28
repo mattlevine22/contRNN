@@ -21,14 +21,17 @@ from pdb import set_trace as bp
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class TimeseriesDataset(Dataset):
-    def __init__(self, x, times, window, n_warmup, target_cols, known_inits):
+    def __init__(self, x, times, window, n_warmup, target_cols, known_inits, obs_noise_sd, short_run=False):
         '''x is shape T (time) x D (space) x N (trajectories)'''
         if x.ndim==2:
             # backwards compatible with 1-trajectory datasets
             x = x[:,:,None]
+        if short_run:
+            x = x[:( window + n_warmup + 10),:,:1]
         self.n_traj = x.shape[2]
         self.n_times = x.shape[0]
         self.x = torch.FloatTensor(x)
+        self.x_noisy = self.x + obs_noise_sd*torch.FloatTensor(np.random.randn(*self.x.shape))
         self.known_inits = known_inits
         self.times = torch.FloatTensor(times) # times associated with data x
         self.window = window
@@ -40,13 +43,14 @@ class TimeseriesDataset(Dataset):
     def __getitem__(self, index):
         i_traj, i0 = self.get_coord(index)
         i1 = i0 + self.window
-        x = self.x[i0:i1, self.target_cols, i_traj] #.squeeze(-1)
+        x             = self.x[i0:i1, self.target_cols, i_traj] #.squeeze(-1)
+        x_noisy = self.x_noisy[i0:i1, self.target_cols, i_traj] #.squeeze(-1)
         times = self.times[i0 + self.n_warmup : i1]
         times_all = self.times[i0:i1]
         y0_TRUE = self.x[i0, 1:, i_traj] #.squeeze(-1) #complement of target_cols
         yend_TRUE = self.x[i1-1, 1:, i_traj] #.squeeze(-1) # get endpoint condition (i.e. IC for next window)
 
-        return x, times, times_all, index, i_traj, y0_TRUE, yend_TRUE
+        return x, x_noisy, times, times_all, index, i_traj, y0_TRUE, yend_TRUE
 
     def get_coord(self, index):
         N = self.len_traj()
@@ -309,6 +313,8 @@ class Paper_NN(torch.nn.Module):
 def train_model(model,
                 x_train,
                 X_validation,
+                short_run=False,
+                obs_noise_sd=0,
                 logger=None,
                 lambda_endpoints=0,
                 use_gpu=False,
@@ -376,11 +382,10 @@ def train_model(model,
     test_times = dt_data*np.arange(ntest)
 
     # create train/test loaders for batching
-    bs_train = get_bs(x_train, batch_size, window)
-    bs_test = get_bs(x_test, batch_size, window)
-
-    train_set = TimeseriesDataset(x_train, train_times, window, n_warmup, obs_inds, known_inits)
-    test_set = TimeseriesDataset(x_test, test_times, window, n_warmup, obs_inds, known_inits)
+    train_set = TimeseriesDataset(x_train, train_times, window, n_warmup, obs_inds, known_inits, obs_noise_sd, short_run)
+    test_set = TimeseriesDataset(x_test, test_times, window, n_warmup, obs_inds, known_inits, obs_noise_sd, short_run)
+    bs_train = min(len(train_set), batch_size)
+    bs_test = min(len(test_set), batch_size)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs_train, shuffle=shuffle_train_loader, drop_last=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=bs_test, shuffle=shuffle_test_loader, drop_last=True)
 
@@ -418,7 +423,7 @@ def train_model(model,
         grad_norm = 0
 
         batch = -1
-        for x, times, times_all, idx, i_traj, y0_TRUE, yend_TRUE in train_loader:
+        for x, x_noisy, times, times_all, idx, i_traj, y0_TRUE, yend_TRUE in train_loader:
             if known_inits:
                 y0 = y0_TRUE
                 yend = yend_TRUE
@@ -426,13 +431,13 @@ def train_model(model,
                 y0 = model.y0[idx]
                 yend = model.y0[idx+1]
             if use_gpu:
-                x, times, times_all, y0, yend, y0_TRUE, yend_TRUE = x.cuda(), times.cuda(), times_all.cuda(), y0.cuda(), yend.cuda(), y0_TRUE.cuda(), yend_TRUE.cuda()
+                x, x_noisy, times, times_all, y0, yend, y0_TRUE, yend_TRUE = x.cuda(), x_noisy.cuda(), times.cuda(), times_all.cuda(), y0.cuda(), yend.cuda(), y0_TRUE.cuda(), yend_TRUE.cuda()
 
             batch += 1
             optimizer.zero_grad()
 
             # set up initial condition
-            u0 = torch.hstack( (x[:,0,:], y0) ) # create full state vector
+            u0 = torch.hstack( (x_noisy[:,0,:], y0) ) # create full state vector
             if use_gpu:
                 u0 = u0.cuda()
 
@@ -454,14 +459,14 @@ def train_model(model,
                     u0 = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=torch.Tensor([0, dt_data]))).permute(0,2,1)[-1]
                 else:
                     u0 = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=torch.Tensor([0, dt_data])))[-1]
-                u0 = torch.hstack( (x[:,j+1,:], u0[:,model.dim_x:]) )
+                u0 = torch.hstack( (x_noisy[:,j+1,:], u0[:,model.dim_x:]) )
             if learn_inits_only:
                 u_pred = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0]).permute(0,2,1))
             else:
                 u_pred = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=times[0]))
 
             # compute losses
-            loss = myloss(x[:,n_warmup:,:].permute(1,0,2), u_pred[:, :, :model.dim_x])
+            loss = myloss(x_noisy[:,n_warmup:,:].permute(1,0,2), u_pred[:, :, :model.dim_x])
             # loss = myloss(x.permute(1,0,2), u_pred[:, :, :model.dim_x])
             train_loss_mse += loss.item()
             # last point of traj should match initial condition of next window
@@ -488,6 +493,7 @@ def train_model(model,
                     for k in range(K):
                         axs[k].plot(times[b].cpu().data, u_pred[:,b,k].cpu().data, label='Approx State {}'.format(k))
                         try:
+                            axs[k].scatter(times_all[b].cpu().data, x_noisy[b,:,k].cpu().data, label='True State (noisy) {}'.format(k))
                             axs[k].plot(times_all[b].cpu().data, x[b,:,k].cpu().data, label='True State {}'.format(k))
                         except:
                             pass

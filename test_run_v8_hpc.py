@@ -19,6 +19,8 @@ import logging
 
 import argparse
 parser = argparse.ArgumentParser()
+parser.add_argument('--short_run', default=1, type=int)
+parser.add_argument('--obs_noise_sd', default=0, type=float)
 parser.add_argument('--dim_x', default=1, type=int)
 parser.add_argument('--dim_y', default=2, type=int)
 parser.add_argument('--hpc', default=0, type=int)
@@ -135,6 +137,8 @@ train_model(my_rnn, X_train.T, X_val.T,
             min_lr=FLAGS.min_lr,
             patience=FLAGS.patience,
             max_grad_norm=FLAGS.max_grad_norm,
+            obs_noise_sd=FLAGS.obs_noise_sd,
+            short_run=FLAGS.short_run,
             gamma=1,
             step_size=50,
             batch_size=FLAGS.batch_size,
