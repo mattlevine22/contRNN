@@ -19,6 +19,8 @@ import logging
 
 import argparse
 parser = argparse.ArgumentParser()
+parser.add_argument('--dim_x', default=1, type=int)
+parser.add_argument('--dim_y', default=2, type=int)
 parser.add_argument('--hpc', default=0, type=int)
 parser.add_argument('--do_normalization', default=0, type=int)
 parser.add_argument('--lr', default=1e-1, type=float)
@@ -87,9 +89,8 @@ my_rnn = Paper_NN(
                     infer_ic=FLAGS.infer_ic,
                     n_layers=FLAGS.n_layers,
                     use_bilinear=FLAGS.use_bilinear,
-                    dim_x=1,
-                    dim_y=2,
-                    dim_output=3,
+                    dim_x=FLAGS.dim_x,
+                    dim_y=FLAGS.dim_y,
                     dim_hidden=FLAGS.dim_hidden,
                     activation=FLAGS.activation)
 

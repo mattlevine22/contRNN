@@ -155,7 +155,6 @@ class Paper_NN(torch.nn.Module):
                         use_f0=False,
                         dim_x=1,
                         dim_y=2,
-                        dim_output=3,
                         dim_hidden=100,
                         infer_normalizers=False,
                         infer_ic=True,
@@ -176,7 +175,7 @@ class Paper_NN(torch.nn.Module):
                 self.dim_y = dim_y
                 self.dim_hidden = dim_hidden
                 self.dim_input = self.dim_x + self.dim_y
-                self.dim_output = dim_output
+                self.dim_output = self.dim_x + self.dim_y
                 self.infer_normalizers = infer_normalizers
                 self.infer_ic = bool(infer_ic)
 
