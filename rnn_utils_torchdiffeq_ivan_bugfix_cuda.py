@@ -21,13 +21,13 @@ from pdb import set_trace as bp
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class TimeseriesDataset(Dataset):
-    def __init__(self, x, times, window, n_warmup, target_cols, known_inits, obs_noise_sd, short_run=False):
+    def __init__(self, x, times, window, warmup, target_cols, known_inits, obs_noise_sd, short_run=False):
         '''x is shape T (time) x D (space) x N (trajectories)'''
         if x.ndim==2:
             # backwards compatible with 1-trajectory datasets
             x = x[:,:,None]
         if short_run:
-            x = x[:( window + n_warmup + 10),:,:1]
+            x = x[:( window + warmup + 10),:,:1]
         self.n_traj = x.shape[2]
         self.n_times = x.shape[0]
         self.x = torch.FloatTensor(x)
@@ -35,7 +35,7 @@ class TimeseriesDataset(Dataset):
         self.known_inits = known_inits
         self.times = torch.FloatTensor(times) # times associated with data x
         self.window = window
-        self.n_warmup = n_warmup
+        self.warmup = warmup
         self.target_cols = target_cols
         self.shape = self.__getshape__()
         self.size = self.__getsize__()
@@ -45,7 +45,7 @@ class TimeseriesDataset(Dataset):
         i1 = i0 + self.window
         x             = self.x[i0:i1, self.target_cols, i_traj] #.squeeze(-1)
         x_noisy = self.x_noisy[i0:i1, self.target_cols, i_traj] #.squeeze(-1)
-        times = self.times[i0 + self.n_warmup : i1]
+        times = self.times[i0 + self.warmup : i1]
         times_all = self.times[i0:i1]
         y0_TRUE = self.x[i0, 1:, i_traj] #.squeeze(-1) #complement of target_cols
         yend_TRUE = self.x[i1-1, 1:, i_traj] #.squeeze(-1) # get endpoint condition (i.e. IC for next window)
@@ -317,31 +317,28 @@ def train_model(model,
                 obs_noise_sd=0,
                 logger=None,
                 lambda_endpoints=0,
-                use_gpu=False,
+                gpu=False,
                 known_inits=False,
                 learn_inits_only=False,
                 pre_trained=False,
                 do_normalization=False,
                 output_dir='output',
                 obs_inds=[0],
-                dt_data=0.01,
+                dt=0.01,
                 use_true_xdot=False,
                 rhs_true=L63_torch,
                 epochs=500,
                 batch_size=3,
                 window=1000,
-                n_warmup=100,
-                learning_rate=0.1,
+                warmup=100,
+                lr=0.1,
                 weight_decay=0, #1e-4, or 1e-5?
-                step_size=100,
-                gamma=0.5,
                 min_lr=0,
                 patience=10,
                 max_grad_norm=0,
-                shuffle_train_loader=False,
-                shuffle_test_loader=False,
+                shuffle=False,
                 plot_interval=1000,
-            ):
+                **kwargs):
 
     fast_plot_interval = max(1, int(plot_interval / 10))
     # batch_size now refers to the number of windows selected in an epoch
@@ -369,7 +366,7 @@ def train_model(model,
         x_normalizer = UnitGaussianNormalizer(x_train)
     else:
         x_normalizer = TrivialNormalizer(x_train)
-    if use_gpu:
+    if gpu:
         x_normalizer.cuda()
     model.x_normalizer = x_normalizer
 
@@ -378,30 +375,30 @@ def train_model(model,
     ntrain = x_train.shape[0]
     ntest = X_validation.shape[0]
 
-    train_times = dt_data*np.arange(ntrain)
-    test_times = dt_data*np.arange(ntest)
+    train_times = dt*np.arange(ntrain)
+    test_times = dt*np.arange(ntest)
 
     # create train/test loaders for batching
-    train_set = TimeseriesDataset(x_train, train_times, window, n_warmup, obs_inds, known_inits, obs_noise_sd, short_run)
-    test_set = TimeseriesDataset(x_test, test_times, window, n_warmup, obs_inds, known_inits, obs_noise_sd, short_run)
+    train_set = TimeseriesDataset(x_train, train_times, window, warmup, obs_inds, known_inits, obs_noise_sd, short_run)
+    test_set = TimeseriesDataset(x_test, test_times, window, warmup, obs_inds, known_inits, obs_noise_sd, short_run)
     bs_train = min(len(train_set), batch_size)
     bs_test = min(len(test_set), batch_size)
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs_train, shuffle=shuffle_train_loader, drop_last=True)
-    test_loader = torch.utils.data.DataLoader(test_set, batch_size=bs_test, shuffle=shuffle_test_loader, drop_last=True)
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs_train, shuffle=shuffle, drop_last=True)
+    test_loader = torch.utils.data.DataLoader(test_set, batch_size=bs_test, shuffle=False, drop_last=True)
 
     # create initial conditions for each window
     my_list = ['y0']
     base_params = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] not in my_list, model.named_parameters()))))
-    opt_param_list = [{'params': base_params, 'weight_decay': weight_decay, 'learning_rate': learning_rate}]
+    opt_param_list = [{'params': base_params, 'weight_decay': weight_decay, 'learning_rate': lr}]
     if not known_inits:
         if not pre_trained:
             model.init_y0(size=(train_set.n_traj*(train_set.n_win_ics+1), model.dim_y)) #(N_traj*N_window_ics x dim_y) +1 for the endpoint of each trajectory
         ## build optimizer and scheduler
         latent_params = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] in my_list, model.named_parameters()))))
-        opt_param_list.append({'params': latent_params, 'weight_decay': 0, 'learning_rate': learning_rate})
+        opt_param_list.append({'params': latent_params, 'weight_decay': 0, 'learning_rate': lr})
 
     # optimizer = torch.optim.Adam([{'params': base_params, 'weight_decay': weight_decay}], lr=learning_rate, weight_decay=0)
-    optimizer = torch.optim.Adam(opt_param_list, lr=learning_rate, weight_decay=weight_decay)
+    optimizer = torch.optim.Adam(opt_param_list, lr=lr, weight_decay=weight_decay)
 
     # optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
@@ -430,7 +427,7 @@ def train_model(model,
             else:
                 y0 = model.y0[idx]
                 yend = model.y0[idx+1]
-            if use_gpu:
+            if gpu:
                 x, x_noisy, times, times_all, y0, yend, y0_TRUE, yend_TRUE = x.cuda(), x_noisy.cuda(), times.cuda(), times_all.cuda(), y0.cuda(), yend.cuda(), y0_TRUE.cuda(), yend_TRUE.cuda()
 
             batch += 1
@@ -438,7 +435,7 @@ def train_model(model,
 
             # set up initial condition
             u0 = torch.hstack( (x_noisy[:,0,:], y0) ) # create full state vector
-            if use_gpu:
+            if gpu:
                 u0 = u0.cuda()
 
             # evaluate perfect model
@@ -454,11 +451,11 @@ def train_model(model,
             # u_pred = odeint(model, y0=u0, t=times[0])
 
             # run warmup
-            for j in range(n_warmup):
+            for j in range(warmup):
                 if learn_inits_only:
-                    u0 = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=torch.Tensor([0, dt_data]))).permute(0,2,1)[-1]
+                    u0 = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=torch.Tensor([0, dt]))).permute(0,2,1)[-1]
                 else:
-                    u0 = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=torch.Tensor([0, dt_data])))[-1]
+                    u0 = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=torch.Tensor([0, dt])))[-1]
                 u0 = torch.hstack( (x_noisy[:,j+1,:], u0[:,model.dim_x:]) )
             if learn_inits_only:
                 u_pred = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0]).permute(0,2,1))
@@ -466,7 +463,7 @@ def train_model(model,
                 u_pred = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=times[0]))
 
             # compute losses
-            loss = myloss(x_noisy[:,n_warmup:,:].permute(1,0,2), u_pred[:, :, :model.dim_x])
+            loss = myloss(x_noisy[:,warmup:,:].permute(1,0,2), u_pred[:, :, :model.dim_x])
             # loss = myloss(x.permute(1,0,2), u_pred[:, :, :model.dim_x])
             train_loss_mse += loss.item()
             # last point of traj should match initial condition of next window
@@ -531,11 +528,11 @@ def train_model(model,
 
             if ep%plot_interval==0 and ep>0 and not learn_inits_only:
                 logger.info('solving for IC = {}'.format(u0))
-                t_eval = dt_data*np.arange(0, 5000)
+                t_eval = dt*np.arange(0, 5000)
                 # t_span = [t_eval[0], t_eval[-1]]
                 settings= {'method': 'RK45'}
                 try:
-                    if use_gpu:
+                    if gpu:
                         sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0.cuda()).reshape(1,-1), t=torch.Tensor(t_eval).cuda())).cpu().data.numpy().squeeze()
                     else:
                         sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0).reshape(1,-1), t=torch.Tensor(t_eval))).cpu().data.numpy().squeeze()
@@ -555,15 +552,15 @@ def train_model(model,
 
                 f_path = os.path.join(plot_dir,'ContinueTraining_Epoch{}'.format(ep))
                 # try:
-                if use_gpu:
-                    test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger, use_gpu=use_gpu)
+                if gpu:
+                    test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu)
                 else:
-                    test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger, use_gpu=use_gpu)
+                    test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu)
 
     return model
 
 
-def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, T_long=5e3, output_path='outputs', logger=None, use_gpu=False):
+def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, T_long=5e3, output_path='outputs', logger=None, gpu=False):
 
     # rhs_nn(t, y)
     # rhs_true(t,y)
@@ -586,12 +583,12 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
     K = sol_3d_true.shape[1]
     # solve approximate 3D ODE at initial condition x0
     if nn_normalizer is None:
-        if use_gpu:
+        if gpu:
             sol_4d_nn = odeint(rhs_nn, y0=x0.reshape(1,-1).cuda(), t=torch.Tensor(t_eval).cuda())
         else:
             sol_4d_nn = torch.FloatTensor(my_solve_ivp( x0.reshape(-1), rhs_nn, t_eval, t_span, settings))
     else:
-        if use_gpu:
+        if gpu:
             sol_4d_nn = odeint(rhs_nn, y0=nn_normalizer.encode(x0).reshape(1,-1).cuda(), t=torch.Tensor(t_eval).cuda())
         else:
             sol_4d_nn = torch.FloatTensor(my_solve_ivp( nn_normalizer.encode(x0).reshape(-1), rhs_nn, t_eval, t_span, settings))
