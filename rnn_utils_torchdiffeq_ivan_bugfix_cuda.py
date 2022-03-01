@@ -599,12 +599,12 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
     # solve approximate 3D ODE at initial condition x0
     if nn_normalizer is None:
         if gpu:
-            sol_4d_nn = odeint(rhs_nn, y0=x0.reshape(1,-1).cuda(), t=torch.Tensor(t_eval).cuda())
+            sol_4d_nn = odeint(rhs_nn, y0=x0.reshape(1,-1).cuda(), t=torch.Tensor(t_eval).cuda()).squeeze(1)
         else:
             sol_4d_nn = torch.FloatTensor(my_solve_ivp( x0.reshape(-1), rhs_nn, t_eval, t_span, settings))
     else:
         if gpu:
-            sol_4d_nn = odeint(rhs_nn, y0=nn_normalizer.encode(x0).reshape(1,-1).cuda(), t=torch.Tensor(t_eval).cuda())
+            sol_4d_nn = odeint(rhs_nn, y0=nn_normalizer.encode(x0).reshape(1,-1).cuda(), t=torch.Tensor(t_eval).cuda()).squeeze(1)
         else:
             sol_4d_nn = torch.FloatTensor(my_solve_ivp( nn_normalizer.encode(x0).reshape(-1), rhs_nn, t_eval, t_span, settings))
         sol_4d_nn = nn_normalizer.decode(sol_4d_nn).cpu().data.numpy()
@@ -619,8 +619,8 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
 #     plt.plot(t_eval[:n],sol_4d_true[:n,0], label='L63 - 4D')
     plt.plot(t_eval[:n],sol_4d_nn[:n,0], label='NN system')
     plt.title('First coordinate (short-time)')
-    plt.savefig(os.path.join(output_path, 'trajectory_short'))
     plt.legend()
+    plt.savefig(os.path.join(output_path, 'trajectory_short'))
     plt.close()
 
     ## Plot medium term trajectories
