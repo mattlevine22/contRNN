@@ -551,11 +551,13 @@ def train_model(model,
                     T_long = 5e3
 
                 f_path = os.path.join(plot_dir,'ContinueTraining_Epoch{}'.format(ep))
-                # try:
-                if gpu:
-                    test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu)
-                else:
-                    test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu)
+                try:
+                    if gpu:
+                        test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu)
+                    else:
+                        test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu)
+                except:
+                    print('Test Plots failed.')
 
     return model
 
