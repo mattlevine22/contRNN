@@ -20,6 +20,7 @@ import logging
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--short_run', default=1, type=int)
+parser.add_argument('--cheat_normalization', default=1, type=int)
 parser.add_argument('--obs_noise_sd', default=0, type=float)
 parser.add_argument('--dim_x', default=1, type=int)
 parser.add_argument('--dim_y', default=2, type=int)
