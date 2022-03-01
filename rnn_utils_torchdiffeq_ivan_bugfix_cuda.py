@@ -349,6 +349,7 @@ def train_model(model,
                 shuffle=False,
                 plot_interval=1000,
                 cheat_normalization=True,
+                noisy_start=True,
                 **kwargs):
 
     fast_plot_interval = max(1, int(plot_interval / 10))
@@ -467,7 +468,8 @@ def train_model(model,
                     u0 = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=torch.Tensor([0, dt]))).permute(0,2,1)[-1]
                 else:
                     u0 = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=torch.Tensor([0, dt])))[-1]
-                u0 = torch.hstack( (x_noisy[:,j+1,:], u0[:,model.dim_x:]) )
+                if j < (warmup-1) or noisy_start:
+                    u0 = torch.hstack( (x_noisy[:,j+1,:], u0[:,model.dim_x:]) )
             if learn_inits_only:
                 u_pred = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0]).permute(0,2,1))
             else:

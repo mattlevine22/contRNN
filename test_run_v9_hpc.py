@@ -19,6 +19,7 @@ import logging
 
 import argparse
 parser = argparse.ArgumentParser()
+parser.add_argument('--noisy_start', default=1, type=int)
 parser.add_argument('--short_run', default=0, type=int)
 parser.add_argument('--cheat_normalization', default=1, type=int)
 parser.add_argument('--obs_noise_sd', default=0, type=float)
