@@ -103,7 +103,7 @@ class UnitGaussianNormalizer(object):
 
     def encode_derivative(self, x):
         x = x.T
-        x[self.obs_inds] = ( x[self.obs_inds] / (self.std + self.eps) ).T
+        x[self.obs_inds] = ( x[self.obs_inds].T / (self.std + self.eps) ).T
         x = x.T
         return x
 
