@@ -568,9 +568,9 @@ def train_model(model,
                     else:
                         test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu)
                 except:
-                    print('Test Plots failed.')
-                    print('u0.shape=', u0.shape)
-                    print('sol_3d_true.shape=', X_validation.shape)
+                    logger.info('Test Plots failed.')
+                    logger.info('u0.shape={}'.format(u0.shape))
+                    logger.info('sol_3d_true.shape={}'.format(X_validation.shape))
 
     return model
 
