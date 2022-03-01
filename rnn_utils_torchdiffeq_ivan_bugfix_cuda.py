@@ -76,7 +76,7 @@ class TimeseriesDataset(Dataset):
 
 # normalization, pointwise gaussian
 class UnitGaussianNormalizer(object):
-    def __init__(self, x, eps=0.00001):
+    def __init__(self, x, eps=0.00001, cheat_normalization=True, obs_inds=None):
         super(UnitGaussianNormalizer, self).__init__()
 
         if x.dim()==3:
@@ -84,18 +84,28 @@ class UnitGaussianNormalizer(object):
         else:
             inds = (0)
         # x could be in shape of ntrain*n or ntrain*T*n or ntrain*n*T
-        self.mean = torch.mean(x, inds).squeeze()
-        self.std = torch.std(x, inds).squeeze()
+        if cheat_normalization:
+            self.mean = torch.mean(x, inds).squeeze()
+            self.std = torch.std(x, inds).squeeze()
+            obs_inds = [i for i in range(x.shape[1])]
+        else:
+            self.mean = torch.mean(x[:,obs_inds,:], inds)
+            self.std = torch.std(x[:,obs_inds,:], inds)
+
         self.eps = eps
+        self.obs_inds = obs_inds
 
     def encode(self, x):
-        x = (x - self.mean) / (self.std + self.eps)
+        x = x.T
+        x[self.obs_inds] = ( (x[self.obs_inds].T - self.mean) / (self.std + self.eps) ).T
+        x = x.T
         return x
 
     def encode_derivative(self, x):
-        x /= (self.std + self.eps)
+        x = x.T
+        x[self.obs_inds] = ( x[self.obs_inds] / (self.std + self.eps) ).T
+        x = x.T
         return x
-
 
     def decode(self, x, sample_idx=None):
         if sample_idx is None:
@@ -338,6 +348,7 @@ def train_model(model,
                 max_grad_norm=0,
                 shuffle=False,
                 plot_interval=1000,
+                cheat_normalization=True,
                 **kwargs):
 
     fast_plot_interval = max(1, int(plot_interval / 10))
@@ -363,7 +374,7 @@ def train_model(model,
 
     if do_normalization:
         logger.info('Doing normalization, go go!')
-        x_normalizer = UnitGaussianNormalizer(x_train)
+        x_normalizer = UnitGaussianNormalizer(x_train, cheat_normalization=cheat_normalization, obs_inds=obs_inds)
     else:
         x_normalizer = TrivialNormalizer(x_train)
     if gpu:
@@ -559,7 +570,7 @@ def train_model(model,
                 except:
                     print('Test Plots failed.')
                     print('u0.shape=', u0.shape)
-                    print('sol_3d_true.shape=', sol_3d_true.shape)
+                    print('sol_3d_true.shape=', X_validation.shape)
 
     return model
 
