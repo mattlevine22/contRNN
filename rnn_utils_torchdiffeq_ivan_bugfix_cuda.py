@@ -96,16 +96,16 @@ class UnitGaussianNormalizer(object):
         self.obs_inds = obs_inds
 
     def encode(self, x):
-        x = x.T
-        x[self.obs_inds] = ( (x[self.obs_inds].T - self.mean) / (self.std + self.eps) ).T
-        x = x.T
-        return x
+        boo = x.T.clone()
+        boo[self.obs_inds] = ( (boo[self.obs_inds].T - self.mean) / (self.std + self.eps) ).T
+        # x = x.T
+        return boo.T
 
     def encode_derivative(self, x):
-        x = x.T
-        x[self.obs_inds] = ( x[self.obs_inds].T / (self.std + self.eps) ).T
-        x = x.T
-        return x
+        boo = x.T.clone()
+        boo[self.obs_inds] = ( boo[self.obs_inds].T / (self.std + self.eps) ).T
+        # x = x.T
+        return boo.T
 
     def decode(self, x, sample_idx=None):
         if sample_idx is None:
