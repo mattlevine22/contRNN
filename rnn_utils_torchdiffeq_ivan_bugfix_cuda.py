@@ -163,6 +163,7 @@ def get_bs(x, batch_size, window):
 
 class Paper_NN(torch.nn.Module):
             def __init__(self,
+                        warmup_type='forcing',
                         logger=None,
                         n_layers=2,
                         use_bilinear=False,
@@ -192,6 +193,7 @@ class Paper_NN(torch.nn.Module):
                 self.dim_output = self.dim_x + self.dim_y
                 self.infer_normalizers = infer_normalizers
                 self.infer_ic = bool(infer_ic)
+                self.set_warmup(warmup_type) # define the warmup scheme
 
                 # create model parameters and functions
                 activation_dict = {
@@ -209,6 +211,12 @@ class Paper_NN(torch.nn.Module):
                     self.output_sd              = torch.nn.Parameter(torch.nn.init.normal_(torch.empty(self.dim_input), mean=0.0, std=100))
 
                 self.print_n_params()
+
+            def set_H(self):
+                H = torch.zeros(self.dim_x, self.dim_output)#, batch_size, N_particles)
+                for k in range(self.dim_x):
+                    H[k,k] = 1
+                self.H = H
 
 
             def set_model(self):
@@ -318,6 +326,90 @@ class Paper_NN(torch.nn.Module):
                 '''input dimensions: N x state_dims'''
                 out = self.rhs(x)
                 return out
+
+            def set_warmup(self, warmup_type='forcing'):
+                warmup_dict = {'forcing': self.warmup_forcing,
+                                '3dvar': self.warmup_3dVar,
+                                'enkf': self.warmup_EnKF}
+                self.warmup = warmup_dict[warmup_type.lower()]
+                self.set_H() # define the H observation matrix for DA
+
+            def warmup_3dVar(self, data, u0, dt, eta=0.5):
+                # u0 = uses data[:,0,:]
+                # data = data[:,1:warmup,:]
+                # in the jth round, we will predict the jth measurement, then update wrt it.
+                K = eta * self.H.T
+
+                u0_upd = u0
+                upd_mean_vec = [u0_upd.detach().data.numpy()]
+                for j in range(data.shape[1]):
+                    # predict
+                    u0_pred = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0_upd), t=torch.Tensor([0, dt])))[-1]
+                    # update
+                    u0_upd = u0_pred + (K @ (data[:,j,:].T - self.H @ u0_pred.T)).T
+                    # u0_good = torch.hstack( (data[:,j,:], u0_pred[:,self.dim_x:]) )
+                    # save updates
+                    upd_mean_vec.append(u0_upd.detach().data.numpy())
+
+                return u0_upd, np.array(upd_mean_vec)
+
+            def warmup_forcing(self, data, u0, dt):
+                # u0 = uses data[:,0,:]
+                # data = data[:,1:warmup,:]
+                # in the jth round, we will predict the jth measurement, then update wrt it.
+
+                upd_mean_vec = [u0.detach().data.numpy()]
+                for j in range(data.shape[1]):
+                    # predict
+                    u0 = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0), t=torch.Tensor([0, dt])))[-1]
+                    # update
+                    u0 = torch.hstack( (data[:,j,:], u0[:,self.dim_x:]) )
+                    # save updates
+                    upd_mean_vec.append(u0.detach().data.numpy())
+
+                return u0, np.array(upd_mean_vec)
+
+            def warmup_EnKF(self, data, u0, dt, N_particles=30, obs_noise_sd=1):
+                # u0 = uses data[:,0,:]
+                # data = data[:,1:warmup,:]
+                # in the jth round, we will predict the jth measurement, then update wrt it.
+                # batch_size = u0.shape[0]
+                H = self.H
+                Gamma = obs_noise_sd * torch.eye(self.dim_x)
+
+                # generate ensemble
+                # u0_ensemble_upd = u0 + torch.FloatTensor(np.random.multivariate_normal(mean=np.zeros(self.dim_output), cov=np.eye(self.dim_output), size=(u0.shape[0], N_particles)))
+                u0_ensemble_upd = u0.unsqueeze(1) + torch.FloatTensor(np.random.multivariate_normal(mean=np.zeros(self.dim_output), cov=1*np.eye(self.dim_output), size=(u0.shape[0], N_particles)))
+
+                upd_mean_vec = [torch.mean(u0_ensemble_upd, axis=1).detach().data.numpy()]
+                for j in range(data.shape[1]):
+                    # predict ensemble
+                    u0_ensemble_pred = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0_ensemble_upd), t=torch.Tensor([0, dt])))[-1]
+
+                    # compute predicted covariance
+                    mean = torch.mean(u0_ensemble_pred, dim=1).unsqueeze(1)
+                    X = u0_ensemble_pred - mean
+                    C_hat = 1/(N_particles-1) * (X.permute(0,2,1) @ X.permute(0,1,2))
+
+                    # compute kalman gain
+                    S = H @ C_hat @ H.T + Gamma
+                    K = C_hat @ H.T @ torch.inverse(S)
+
+                    K[:,:self.dim_x] = 0.5
+
+                    # print(j , K[0].data)
+                    # update ensemble
+                    y_pred = (u0_ensemble_pred @ H.T).permute(0,2,1)
+                    y_obs = data[:,j,:].expand(-1,N_particles).unsqueeze(1)
+                    # y_obs = data[:,j,:].expand(y_pred.shape)
+
+                    u0_ensemble_upd = u0_ensemble_pred + (K @ (y_obs - y_pred)).permute(0,2,1)
+
+                    upd_mean = torch.mean(u0_ensemble_upd, axis=1)
+                    # save updates
+                    upd_mean_vec.append(upd_mean.detach().data.numpy())
+
+                return upd_mean, np.array(upd_mean_vec)
 
 
 def train_model(model,
@@ -463,13 +555,15 @@ def train_model(model,
             # u_pred = odeint(model, y0=u0, t=times[0])
 
             # run warmup
-            for j in range(warmup):
-                if learn_inits_only:
-                    u0 = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=torch.Tensor([0, dt]))).permute(0,2,1)[-1]
-                else:
-                    u0 = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=torch.Tensor([0, dt])))[-1]
-                if j < (warmup-1) or noisy_start:
-                    u0 = torch.hstack( (x_noisy[:,j+1,:], u0[:,model.dim_x:]) )
+            # for j in range(warmup):
+            #     if learn_inits_only:
+            #         u0 = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=torch.Tensor([0, dt]))).permute(0,2,1)[-1]
+            #     else:
+            #         u0 = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=torch.Tensor([0, dt])))[-1]
+            #     if j < (warmup-1) or noisy_start:
+            #         u0 = torch.hstack( (x_noisy[:,j+1,:], u0[:,model.dim_x:]) )
+            u0, upd_mean_vec = model.warmup(data=x_noisy[:,1:(warmup+1),:], u0=u0, dt=dt)
+
             if learn_inits_only:
                 u_pred = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0]).permute(0,2,1))
             else:
@@ -501,12 +595,13 @@ def train_model(model,
                     K = u_pred.data.shape[-1]
                     fig, axs = plt.subplots(nrows=K, figsize=(20, 10))
                     for k in range(K):
-                        axs[k].plot(times[b].cpu().data, u_pred[:,b,k].cpu().data, label='Approx State {}'.format(k))
                         try:
-                            axs[k].scatter(times_all[b].cpu().data, x_noisy[b,:,k].cpu().data, label='True State (noisy) {}'.format(k))
-                            axs[k].plot(times_all[b].cpu().data, x[b,:,k].cpu().data, label='True State {}'.format(k))
+                            axs[k].plot(times_all[b].cpu().data, x[b,:,k].cpu().data, label='True State {}'.format(k), color='orange')
+                            axs[k].scatter(times_all[b].cpu().data, x_noisy[b,:,k].cpu().data, label='True State (noisy) {}'.format(k), color='orange')
                         except:
                             pass
+                        axs[k].plot(times[b].cpu().data, u_pred[:,b,k].cpu().data, label='NN-Predicted State {}'.format(k), color='blue')
+                        axs[k].scatter(times_all[b][:(warmup+1)].cpu().data, upd_mean_vec[:,b,k], label='NN-Assimilated State {}'.format(k), color='blue', marker='x')
                         axs[k].legend()
                     plt.savefig(os.path.join(plot_dir,'TrainPlot_Epoch{}_Batch{}'.format(ep,batch)))
                     plt.close()

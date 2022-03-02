@@ -14,11 +14,13 @@ from dynamical_models import L63_torch
 from rnn_utils_torchdiffeq_ivan_bugfix_cuda import Paper_NN, train_model
 from pdb import set_trace as bp
 from hpc_utils import dict_to_file
+from git import Repo
 
 import logging
 
 import argparse
 parser = argparse.ArgumentParser()
+parser.add_argument('--warmup_type', default='forcing', type=str)
 parser.add_argument('--noisy_start', default=1, type=int)
 parser.add_argument('--short_run', default=0, type=int)
 parser.add_argument('--cheat_normalization', default=1, type=int)
@@ -66,6 +68,11 @@ logging.basicConfig(filename=log_fname, level=logging.INFO, format="%(message)s 
 logger = logging.getLogger()
 logger.info('###### BEGIN EXPERIMENT  #########')
 
+local_repo = Repo(search_parent_directories=True)
+local_branch = local_repo.active_branch.name
+sha = local_repo.head.object.hexsha
+logger.info('Using git branch "{}" on commit "{}"'.format(local_branch, sha))
+
 # load L63 data sampled at dt=0.01
 # dt=0.01
 if FLAGS.multi_traj:
@@ -88,6 +95,7 @@ logger.info('Test shape: {}'.format(X_val.shape))
 # create new RNN object
 my_rnn = Paper_NN(
                     logger=logger,
+                    warmup_type=FLAGS.warmup_type,
                     use_f0=FLAGS.use_f0,
                     infer_normalizers=False,
                     infer_ic=FLAGS.infer_ic,
@@ -103,7 +111,10 @@ if FLAGS.gpu:
 
 # try to load the pre-trained RNN
 try:
-    my_rnn = torch.load(os.path.join(output_dir, 'rnn.pt'))
+    if FLAGS.gpu:
+        my_rnn = torch.load(os.path.join(output_dir, 'rnn.pt'))
+    else:
+        my_rnn = torch.load(os.path.join(output_dir, 'rnn.pt'), map_location=torch.device('cpu'))
     logger.info('Loaded pre-trained model.')
     pre_trained=True
 except:
