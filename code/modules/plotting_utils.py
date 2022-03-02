@@ -28,7 +28,9 @@ from pdb import set_trace as bp
 
 def plot_logs(x, name, title, xlabel):
     fig, ax = plt.subplots(nrows=1, figsize=(20, 10))
-    ax.plot(x)
+    for key in x:
+        ax.plot(x[key], label=key)
+    ax.legend()
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     plt.savefig(name)
@@ -39,7 +41,6 @@ def plot_logs(x, name, title, xlabel):
     ax.set_xscale('linear')
     plt.savefig(name+'_ylog')
     plt.close()
-
 
 def find_collapse(X, times=None, window=5000, true_mean=-0.07, true_sd=7.92):
     N, K = X.shape

@@ -475,16 +475,14 @@ def train_model(model,
     model.x_normalizer = x_normalizer
 
 
-    # get datasizes
+    # get datasets
     ntrain = x_train.shape[0]
-    ntest = X_validation.shape[0]
-
     train_times = dt*np.arange(ntrain)
-    test_times = dt*np.arange(ntest)
+    full_dataset = TimeseriesDataset(x_train, train_times, window, warmup, obs_inds, known_inits, obs_noise_sd, short_run)
+    train_size = int(0.8 * len(full_dataset))
+    test_size = len(full_dataset) - train_size
+    train_set, test_set = torch.utils.data.random_split(full_dataset, [train_size, test_size])
 
-    # create train/test loaders for batching
-    train_set = TimeseriesDataset(x_train, train_times, window, warmup, obs_inds, known_inits, obs_noise_sd, short_run)
-    test_set = TimeseriesDataset(x_test, test_times, window, warmup, obs_inds, known_inits, obs_noise_sd, short_run)
     bs_train = min(len(train_set), batch_size)
     bs_test = min(len(test_set), batch_size)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs_train, shuffle=shuffle, drop_last=True)
@@ -496,7 +494,7 @@ def train_model(model,
     opt_param_list = [{'params': base_params, 'weight_decay': weight_decay, 'learning_rate': lr}]
     if not known_inits:
         if not pre_trained:
-            model.init_y0(size=(train_set.n_traj*(train_set.n_win_ics+1), model.dim_y)) #(N_traj*N_window_ics x dim_y) +1 for the endpoint of each trajectory
+            model.init_y0(size=(full_dataset.n_traj*(full_dataset.n_win_ics+1), model.dim_y)) #(N_traj*N_window_ics x dim_y) +1 for the endpoint of each trajectory
         ## build optimizer and scheduler
         latent_params = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] in my_list, model.named_parameters()))))
         opt_param_list.append({'params': latent_params, 'weight_decay': 0, 'learning_rate': lr})
@@ -512,6 +510,8 @@ def train_model(model,
     lr_history = {key: [] for key in range(len(optimizer.param_groups))}
     train_loss_history = []
     train_loss_mse_history = []
+    test_loss_history = []
+    test_loss_mse_history = []
     grad_norm_history = []
     myloss = torch.nn.MSELoss()
     for ep in range(epochs):
@@ -519,6 +519,8 @@ def train_model(model,
             lr_history[grp].append(optimizer.param_groups[grp]['lr'])
         model.train()
         t1 = default_timer()
+        test_loss = 0
+        test_loss_mse = 0
         train_loss = 0
         train_loss_mse = 0
         grad_norm = 0
@@ -617,23 +619,53 @@ def train_model(model,
         # grad norms
         grad_norm /= len(train_loader)
         grad_norm_history += [grad_norm]
-        if ep%fast_plot_interval==0:
-            logger.info('Epoch {}, Train loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, round(default_timer() - t1, 2)))
-            torch.save(model, os.path.join(output_dir, 'rnn.pt'))
-        # if ep%100==0:
-            plot_logs(x=train_loss_history, name=os.path.join(summary_dir,'training_history'), title='Train Loss', xlabel='Epochs')
-            plot_logs(x=train_loss_mse_history, name=os.path.join(summary_dir,'training_mse_history'), title='Train Loss MSE', xlabel='Epochs')
-            for grp in lr_history.keys():
-                plot_logs(x=lr_history[grp], name=os.path.join(summary_dir,'learning_rates_group{}'.format(grp)), title='Learning Rate Schedule', xlabel='Epochs')
-            for l in range(len(grad_norm)):
-                plot_logs(x=np.array(grad_norm_history)[:,l], name=os.path.join(summary_dir,'grad_norm_layer{}'.format(l)), title='Gradient Norms', xlabel='Epochs')
         scheduler.step(train_loss)
 
         # validate by running off-data and predicting ahead
         model.eval()
         with torch.no_grad():
-            u0 = u_pred[-1,-1,:].cpu().data
+            for x, x_noisy, times, times_all, idx, i_traj, y0_TRUE, yend_TRUE in test_loader:
+                if known_inits:
+                    y0 = y0_TRUE
+                    yend = yend_TRUE
+                else:
+                    y0 = model.y0[idx]
+                    yend = model.y0[idx+1]
+                if gpu:
+                    x, x_noisy, times, times_all, y0, yend, y0_TRUE, yend_TRUE = x.cuda(), x_noisy.cuda(), times.cuda(), times_all.cuda(), y0.cuda(), yend.cuda(), y0_TRUE.cuda(), yend_TRUE.cuda()
 
+                # set up initial condition
+                u0 = torch.hstack( (x_noisy[:,0,:], y0) ) # create full state vector
+                if gpu:
+                    u0 = u0.cuda()
+
+                # run forward model
+                u0, upd_mean_vec = model.warmup(data=x_noisy[:,1:(warmup+1),:], u0=u0, dt=dt)
+
+                if learn_inits_only:
+                    u_pred = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0]).permute(0,2,1))
+                else:
+                    u_pred = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=times[0]))
+
+                # compute losses
+                loss = myloss(x_noisy[:,warmup:,:].permute(1,0,2), u_pred[:, :, :model.dim_x])
+                # loss = myloss(x.permute(1,0,2), u_pred[:, :, :model.dim_x])
+                test_loss_mse += loss.item()
+                # last point of traj should match initial condition of next window
+                end_point_loss = lambda_endpoints * myloss(yend, u_pred[-1, :, model.dim_x:])
+                loss += end_point_loss
+                test_loss += loss.item()
+
+                # regularized loss
+                test_loss /= len(test_loader)
+                test_loss_history += [test_loss]
+
+                # unregularized loss
+                test_loss_mse /= len(test_loader)
+                test_loss_mse_history += [test_loss_mse]
+
+            # now run long-term model eval-stuff
+            u0 = u_pred[-1,-1,:].cpu().data
             if ep%plot_interval==0 and ep>0 and not learn_inits_only:
                 logger.info('solving for IC = {}'.format(u0))
                 t_eval = dt*np.arange(0, 5000)
@@ -668,6 +700,15 @@ def train_model(model,
                     logger.info('Test Plots failed.')
                     logger.info('u0.shape={}'.format(u0.shape))
                     logger.info('sol_3d_true.shape={}'.format(X_validation.shape))
+
+        # report summary stats
+        if ep%fast_plot_interval==0:
+            logger.info('Epoch {}, Train loss {}, Test loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, test_loss, round(default_timer() - t1, 2)))
+            torch.save(model, os.path.join(output_dir, 'rnn.pt'))
+            plot_logs(x={'Train':train_loss_history, 'Test':test_loss_history}, name=os.path.join(summary_dir,'loss_history'), title='Loss', xlabel='Epochs')
+            plot_logs(x=lr_history, name=os.path.join(summary_dir,'learning_rates'), title='Learning Rate Schedule', xlabel='Epochs')
+            gn_dict = {'Layer {}'.format(l): np.array(grad_norm_history)[:,l] for l in range(len(grad_norm))}
+            plot_logs(x=gn_dict, name=os.path.join(summary_dir,'grad_norm'), title='Gradient Norms', xlabel='Epochs')
 
     return model
 
