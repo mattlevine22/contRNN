@@ -173,6 +173,7 @@ class Paper_NN(torch.nn.Module):
                         dim_hidden=100,
                         infer_normalizers=False,
                         infer_ic=True,
+                        gpu=False,
                         activation='relu'):
                 super(Paper_NN, self).__init__()
 
@@ -193,6 +194,7 @@ class Paper_NN(torch.nn.Module):
                 self.dim_output = self.dim_x + self.dim_y
                 self.infer_normalizers = infer_normalizers
                 self.infer_ic = bool(infer_ic)
+                self.gpu = gpu
                 self.set_warmup(warmup_type) # define the warmup scheme
 
                 # create model parameters and functions
@@ -217,7 +219,13 @@ class Paper_NN(torch.nn.Module):
                 for k in range(self.dim_x):
                     H[k,k] = 1
                 self.H = H
+                if self.gpu:
+                    self.H = self.H.cuda()
 
+            def set_Gamma(self, obs_noise_sd=1):
+                self.Gamma = obs_noise_sd * torch.eye(self.dim_x)
+                if self.gpu:
+                    self.Gamma = self.Gamma.cuda()
 
             def set_model(self):
                 if self.n_layers==1:
@@ -333,6 +341,7 @@ class Paper_NN(torch.nn.Module):
                                 'enkf': self.warmup_EnKF}
                 self.warmup = warmup_dict[warmup_type.lower()]
                 self.set_H() # define the H observation matrix for DA
+                self.set_Gamma(obs_noise_sd=1)
 
             def warmup_3dVar(self, data, u0, dt, eta=0.5):
                 # u0 = uses data[:,0,:]
@@ -375,7 +384,7 @@ class Paper_NN(torch.nn.Module):
                 # in the jth round, we will predict the jth measurement, then update wrt it.
                 # batch_size = u0.shape[0]
                 H = self.H
-                Gamma = obs_noise_sd * torch.eye(self.dim_x)
+                Gamma = self.Gamma
 
                 # generate ensemble
                 # u0_ensemble_upd = u0 + torch.FloatTensor(np.random.multivariate_normal(mean=np.zeros(self.dim_output), cov=np.eye(self.dim_output), size=(u0.shape[0], N_particles)))
