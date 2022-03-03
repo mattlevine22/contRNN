@@ -668,13 +668,13 @@ def train_model(model,
                 loss += end_point_loss
                 test_loss += loss.item()
 
-                # regularized loss
-                test_loss /= len(test_loader)
-                test_loss_history += [test_loss]
+            # regularized loss
+            test_loss /= len(test_loader)
+            test_loss_history += [test_loss]
 
-                # unregularized loss
-                test_loss_mse /= len(test_loader)
-                test_loss_mse_history += [test_loss_mse]
+            # unregularized loss
+            test_loss_mse /= len(test_loader)
+            test_loss_mse_history += [test_loss_mse]
 
             # now run long-term model eval-stuff
             u0 = u_pred[-1,-1,:].cpu().data
