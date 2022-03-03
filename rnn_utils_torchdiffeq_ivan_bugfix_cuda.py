@@ -524,18 +524,23 @@ def train_model(model,
     train_loss_mse_history = []
     test_loss_history = []
     test_loss_mse_history = []
-    grad_norm_history = []
+    grad_norm_pre_clip_history = []
+    grad_norm_post_clip_history = []
+    time_history = []
     myloss = torch.nn.MSELoss()
+    t_outer = default_timer()
     for ep in range(epochs):
+        t1 = default_timer()
+        time_history.append(t1 - t_outer)
         for grp in range(len(optimizer.param_groups)):
             lr_history[grp].append(optimizer.param_groups[grp]['lr'])
         model.train()
-        t1 = default_timer()
         test_loss = 0
         test_loss_mse = 0
         train_loss = 0
         train_loss_mse = 0
-        grad_norm = 0
+        grad_norm_pre_clip = 0
+        grad_norm_post_clip = 0
 
         batch = -1
         for x, x_noisy, times, times_all, idx, i_traj, y0_TRUE, yend_TRUE in train_loader:
@@ -593,15 +598,19 @@ def train_model(model,
 
             loss.backward()
 
+            # compute gradient norms for monitoring
+            grad_norm_pre_clip += model.compute_grad_norm()
+
             # clip gradient norm
             if max_grad_norm > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_grad_norm)
 
+            # compute gradient norms for monitoring
+            grad_norm_post_clip += model.compute_grad_norm()
+
             optimizer.step()
             train_loss += loss.item()
 
-            # compute gradient norms for monitoring
-            grad_norm += model.compute_grad_norm()
 
             if ep%plot_interval==0:
                 if batch <=5:
@@ -629,8 +638,11 @@ def train_model(model,
         train_loss_mse_history += [train_loss_mse]
 
         # grad norms
-        grad_norm /= len(train_loader)
-        grad_norm_history += [grad_norm]
+        grad_norm_pre_clip /= len(train_loader)
+        grad_norm_pre_clip_history += [grad_norm_pre_clip]
+        grad_norm_post_clip /= len(train_loader)
+        grad_norm_post_clip_history += [grad_norm_post_clip]
+
         scheduler.step(train_loss)
 
         # validate by running off-data and predicting ahead
@@ -717,10 +729,13 @@ def train_model(model,
         if ep%fast_plot_interval==0:
             logger.info('Epoch {}, Train loss {}, Test loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, test_loss, round(default_timer() - t1, 2)))
             torch.save(model, os.path.join(output_dir, 'rnn.pt'))
+            plot_logs(x={'Time':time_history}, name=os.path.join(summary_dir,'timer'), title='Cumulative Training Time', xlabel='Epochs')
             plot_logs(x={'Train':train_loss_history, 'Test':test_loss_history}, name=os.path.join(summary_dir,'loss_history'), title='Loss', xlabel='Epochs')
             plot_logs(x=lr_history, name=os.path.join(summary_dir,'learning_rates'), title='Learning Rate Schedule', xlabel='Epochs')
-            gn_dict = {'Layer {}'.format(l): np.array(grad_norm_history)[:,l] for l in range(len(grad_norm))}
-            plot_logs(x=gn_dict, name=os.path.join(summary_dir,'grad_norm'), title='Gradient Norms', xlabel='Epochs')
+            gn_dict = {'Layer {}'.format(l): np.array(grad_norm_pre_clip_history)[:,l] for l in range(len(grad_norm_pre_clip))}
+            plot_logs(x=gn_dict, name=os.path.join(summary_dir,'grad_norm_pre_clip'), title='Gradient Norms (Pre-Clip)', xlabel='Epochs')
+            gn_dict = {'Layer {}'.format(l): np.array(grad_norm_post_clip_history)[:,l] for l in range(len(grad_norm_post_clip))}
+            plot_logs(x=gn_dict, name=os.path.join(summary_dir,'grad_norm_post_clip'), title='Gradient Norms (Post-Clip)', xlabel='Epochs')
 
     return model
 
