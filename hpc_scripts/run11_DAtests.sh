@@ -5,7 +5,7 @@
 #SBATCH --time=72:00:00   # walltime
 #SBATCH --ntasks=10   # number of processor cores (i.e. tasks)
 #SBATCH --gpus-per-task=1
-#SBATCH --mem-per-cpu=2G   # memory per CPU core
+#SBATCH --mem-per-cpu=1G   # memory per CPU core
 #SBATCH -J "run11"   # job name
 
 module load python3/3.7.0
