@@ -341,7 +341,7 @@ class Paper_NN(torch.nn.Module):
                 K = eta * self.H.T
 
                 u0_upd = u0
-                upd_mean_vec = [u0_upd.detach().data.numpy()]
+                upd_mean_vec = [u0_upd.cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
                     # predict
                     u0_pred = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0_upd), t=torch.Tensor([0, dt])))[-1]
@@ -349,7 +349,7 @@ class Paper_NN(torch.nn.Module):
                     u0_upd = u0_pred + (K @ (data[:,j,:].T - self.H @ u0_pred.T)).T
                     # u0_good = torch.hstack( (data[:,j,:], u0_pred[:,self.dim_x:]) )
                     # save updates
-                    upd_mean_vec.append(u0_upd.detach().data.numpy())
+                    upd_mean_vec.append(u0_upd.cpu().detach().data.numpy())
 
                 return u0_upd, np.array(upd_mean_vec)
 
@@ -358,14 +358,14 @@ class Paper_NN(torch.nn.Module):
                 # data = data[:,1:warmup,:]
                 # in the jth round, we will predict the jth measurement, then update wrt it.
 
-                upd_mean_vec = [u0.detach().data.numpy()]
+                upd_mean_vec = [u0.cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
                     # predict
                     u0 = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0), t=torch.Tensor([0, dt])))[-1]
                     # update
                     u0 = torch.hstack( (data[:,j,:], u0[:,self.dim_x:]) )
                     # save updates
-                    upd_mean_vec.append(u0.detach().data.numpy())
+                    upd_mean_vec.append(u0.cpu().detach().data.numpy())
 
                 return u0, np.array(upd_mean_vec)
 
@@ -381,7 +381,7 @@ class Paper_NN(torch.nn.Module):
                 # u0_ensemble_upd = u0 + torch.FloatTensor(np.random.multivariate_normal(mean=np.zeros(self.dim_output), cov=np.eye(self.dim_output), size=(u0.shape[0], N_particles)))
                 u0_ensemble_upd = u0.unsqueeze(1) + torch.FloatTensor(np.random.multivariate_normal(mean=np.zeros(self.dim_output), cov=1*np.eye(self.dim_output), size=(u0.shape[0], N_particles)))
 
-                upd_mean_vec = [torch.mean(u0_ensemble_upd, axis=1).detach().data.numpy()]
+                upd_mean_vec = [torch.mean(u0_ensemble_upd, axis=1).cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
                     # predict ensemble
                     u0_ensemble_pred = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0_ensemble_upd), t=torch.Tensor([0, dt])))[-1]
@@ -407,7 +407,7 @@ class Paper_NN(torch.nn.Module):
 
                     upd_mean = torch.mean(u0_ensemble_upd, axis=1)
                     # save updates
-                    upd_mean_vec.append(upd_mean.detach().data.numpy())
+                    upd_mean_vec.append(upd_mean.cpu().detach().data.numpy())
 
                 return upd_mean, np.array(upd_mean_vec)
 
