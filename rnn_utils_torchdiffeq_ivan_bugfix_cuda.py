@@ -388,7 +388,10 @@ class Paper_NN(torch.nn.Module):
 
                 # generate ensemble
                 # u0_ensemble_upd = u0 + torch.FloatTensor(np.random.multivariate_normal(mean=np.zeros(self.dim_output), cov=np.eye(self.dim_output), size=(u0.shape[0], N_particles)))
-                u0_ensemble_upd = u0.unsqueeze(1) + torch.FloatTensor(np.random.multivariate_normal(mean=np.zeros(self.dim_output), cov=1*np.eye(self.dim_output), size=(u0.shape[0], N_particles)))
+                noise = torch.FloatTensor(np.random.multivariate_normal(mean=np.zeros(self.dim_output), cov=1*np.eye(self.dim_output), size=(u0.shape[0], N_particles)))
+                if self.gpu:
+                    noise = noise.cuda()
+                u0_ensemble_upd = u0.unsqueeze(1) + noise
 
                 upd_mean_vec = [torch.mean(u0_ensemble_upd, axis=1).cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
