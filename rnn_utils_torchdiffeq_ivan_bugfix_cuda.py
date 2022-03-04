@@ -348,12 +348,15 @@ class Paper_NN(torch.nn.Module):
                 # data = data[:,1:warmup,:]
                 # in the jth round, we will predict the jth measurement, then update wrt it.
                 K = eta * self.H.T
+                tstep = torch.Tensor([0, dt])
+                if self.gpu:
+                    tstep = tstep.cuda()
 
                 u0_upd = u0
                 upd_mean_vec = [u0_upd.cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
                     # predict
-                    u0_pred = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0_upd), t=torch.Tensor([0, dt])))[-1]
+                    u0_pred = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0_upd), t=tstep))[-1]
                     # update
                     u0_upd = u0_pred + (K @ (data[:,j,:].T - self.H @ u0_pred.T)).T
                     # u0_good = torch.hstack( (data[:,j,:], u0_pred[:,self.dim_x:]) )
@@ -366,11 +369,14 @@ class Paper_NN(torch.nn.Module):
                 # u0 = uses data[:,0,:]
                 # data = data[:,1:warmup,:]
                 # in the jth round, we will predict the jth measurement, then update wrt it.
+                tstep = torch.Tensor([0, dt])
+                if self.gpu:
+                    tstep = tstep.cuda()
 
                 upd_mean_vec = [u0.cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
                     # predict
-                    u0 = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0), t=torch.Tensor([0, dt])))[-1]
+                    u0 = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0), t=tstep))[-1]
                     # update
                     u0 = torch.hstack( (data[:,j,:], u0[:,self.dim_x:]) )
                     # save updates
@@ -386,6 +392,10 @@ class Paper_NN(torch.nn.Module):
                 H = self.H
                 Gamma = self.Gamma
 
+                tstep = torch.Tensor([0, dt])
+                if self.gpu:
+                    tstep = tstep.cuda()
+
                 # generate ensemble
                 # u0_ensemble_upd = u0 + torch.FloatTensor(np.random.multivariate_normal(mean=np.zeros(self.dim_output), cov=np.eye(self.dim_output), size=(u0.shape[0], N_particles)))
                 noise = torch.FloatTensor(np.random.multivariate_normal(mean=np.zeros(self.dim_output), cov=1*np.eye(self.dim_output), size=(u0.shape[0], N_particles)))
@@ -396,7 +406,7 @@ class Paper_NN(torch.nn.Module):
                 upd_mean_vec = [torch.mean(u0_ensemble_upd, axis=1).cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
                     # predict ensemble
-                    u0_ensemble_pred = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0_ensemble_upd), t=torch.Tensor([0, dt])))[-1]
+                    u0_ensemble_pred = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0_ensemble_upd), t=tstep))[-1]
 
                     # compute predicted covariance
                     mean = torch.mean(u0_ensemble_pred, dim=1).unsqueeze(1)
@@ -610,7 +620,6 @@ def train_model(model,
 
             optimizer.step()
             train_loss += loss.item()
-
 
             if ep%plot_interval==0:
                 if batch <=5:

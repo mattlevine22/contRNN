@@ -136,6 +136,9 @@ FLAGS.output_dir = output_dir
 
 logger.info('N train ='.format(n_train))
 logger.info('Begin RNN training...')
-train_model(my_rnn, X_train.T, X_val.T,
-            logger=logger,
-            **FLAGS.__dict__)
+try:
+    train_model(my_rnn, X_train.T, X_val.T,
+                logger=logger,
+                **FLAGS.__dict__)
+except Exception:
+    logger.exception('Fatal error in main loop.')
