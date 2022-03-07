@@ -541,7 +541,7 @@ def train_model(model,
     t_outer = default_timer()
     for ep in range(epochs):
         t1 = default_timer()
-        time_history.append(t1 - t_outer)
+        time_history.append((t1 - t_outer)/60/60)
         for grp in range(len(optimizer.param_groups)):
             lr_history[grp].append(optimizer.param_groups[grp]['lr'])
         model.train()
@@ -738,7 +738,7 @@ def train_model(model,
         if ep%fast_plot_interval==0:
             logger.info('Epoch {}, Train loss {}, Test loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, test_loss, round(default_timer() - t1, 2)))
             torch.save(model, os.path.join(output_dir, 'rnn.pt'))
-            plot_logs(x={'Time':time_history}, name=os.path.join(summary_dir,'timer'), title='Cumulative Training Time', xlabel='Epochs')
+            plot_logs(x={'Time':time_history}, name=os.path.join(summary_dir,'timer'), title='Cumulative Training Time (hrs)', xlabel='Epochs')
             plot_logs(x={'Train':train_loss_history, 'Test':test_loss_history}, name=os.path.join(summary_dir,'loss_history'), title='Loss', xlabel='Epochs')
             plot_logs(x=lr_history, name=os.path.join(summary_dir,'learning_rates'), title='Learning Rate Schedule', xlabel='Epochs')
             gn_dict = {'Layer {}'.format(l): np.array(grad_norm_pre_clip_history)[:,l] for l in range(len(grad_norm_pre_clip))}
