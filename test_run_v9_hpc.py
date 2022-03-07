@@ -20,6 +20,7 @@ import logging
 
 import argparse
 parser = argparse.ArgumentParser()
+parser.add_argument('--backprop_warmup', default=1, type=int)
 parser.add_argument('--warmup_type', default='forcing', type=str)
 parser.add_argument('--noisy_start', default=1, type=int)
 parser.add_argument('--short_run', default=0, type=int)

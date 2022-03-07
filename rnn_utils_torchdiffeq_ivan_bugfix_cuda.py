@@ -437,6 +437,7 @@ class Paper_NN(torch.nn.Module):
 def train_model(model,
                 x_train,
                 X_validation,
+                backprop_warmup=True,
                 short_run=False,
                 obs_noise_sd=0,
                 logger=None,
@@ -591,7 +592,12 @@ def train_model(model,
             #         u0 = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=torch.Tensor([0, dt])))[-1]
             #     if j < (warmup-1) or noisy_start:
             #         u0 = torch.hstack( (x_noisy[:,j+1,:], u0[:,model.dim_x:]) )
-            u0, upd_mean_vec = model.warmup(data=x_noisy[:,1:(warmup+1),:], u0=u0, dt=dt)
+
+            if backprop_warmup:
+                u0, upd_mean_vec = model.warmup(data=x_noisy[:,1:(warmup+1),:], u0=u0, dt=dt)
+            else:
+                with torch.no_grad():
+                    u0, upd_mean_vec = model.warmup(data=x_noisy[:,1:(warmup+1),:], u0=u0, dt=dt)
 
             if learn_inits_only:
                 u_pred = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0]).permute(0,2,1))
