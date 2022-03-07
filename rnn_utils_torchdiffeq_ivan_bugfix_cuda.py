@@ -356,7 +356,7 @@ class Paper_NN(torch.nn.Module):
                 upd_mean_vec = [u0_upd.cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
                     # predict
-                    u0_pred = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0_upd), t=tstep))[-1]
+                    u0_pred = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0_upd), t=tstep)[-1])
                     # update
                     u0_upd = u0_pred + (K @ (data[:,j,:].T - self.H @ u0_pred.T)).T
                     # u0_good = torch.hstack( (data[:,j,:], u0_pred[:,self.dim_x:]) )
@@ -376,7 +376,7 @@ class Paper_NN(torch.nn.Module):
                 upd_mean_vec = [u0.cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
                     # predict
-                    u0 = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0), t=tstep))[-1]
+                    u0 = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0), t=tstep)[-1])
                     # update
                     u0 = torch.hstack( (data[:,j,:], u0[:,self.dim_x:]) )
                     # save updates
@@ -406,7 +406,7 @@ class Paper_NN(torch.nn.Module):
                 upd_mean_vec = [torch.mean(u0_ensemble_upd, axis=1).cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
                     # predict ensemble
-                    u0_ensemble_pred = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0_ensemble_upd), t=tstep))[-1]
+                    u0_ensemble_pred = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0_ensemble_upd), t=tstep)[-1])
 
                     # compute predicted covariance
                     mean = torch.mean(u0_ensemble_pred, dim=1).unsqueeze(1)
