@@ -425,7 +425,7 @@ class Paper_NN(torch.nn.Module):
 
 def train_model(model,
                 x_train,
-                X_validation,
+                X_long,
                 backprop_warmup=True,
                 short_run=False,
                 obs_noise_sd=0,
@@ -475,7 +475,6 @@ def train_model(model,
 
     # set datasets as torch tensors
     x_train = torch.FloatTensor(x_train)
-    x_test = torch.FloatTensor(X_validation)
 
     if do_normalization:
         if cheat_normalization and model.dim_y != x_train.shape[1]:
@@ -724,13 +723,13 @@ def train_model(model,
                 f_path = os.path.join(plot_dir,'ContinueTraining_Epoch{}'.format(ep))
                 try:
                     if gpu:
-                        test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu)
+                        test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu)
                     else:
-                        test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_validation, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu)
+                        test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu)
                 except:
                     logger.info('Test Plots failed.')
                     logger.info('u0.shape={}'.format(u0.shape))
-                    logger.info('sol_3d_true.shape={}'.format(X_validation.shape))
+                    logger.info('sol_3d_true.shape={}'.format(X_long.shape))
 
         # report summary stats
         if ep%fast_plot_interval==0:
