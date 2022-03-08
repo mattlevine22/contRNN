@@ -20,6 +20,7 @@ import logging
 
 import argparse
 parser = argparse.ArgumentParser()
+parser.add_argument('--ds_name', default="L63", type=str)
 parser.add_argument('--backprop_warmup', default=1, type=int)
 parser.add_argument('--warmup_type', default='forcing', type=str)
 parser.add_argument('--noisy_start', default=1, type=int)
@@ -57,7 +58,7 @@ parser.add_argument('--output_dir', default='default_output', type=str)
 FLAGS = parser.parse_args()
 
 if FLAGS.hpc:
-    base_dir = '/groups/astuart/mlevine/contRNN/l63'
+    base_dir = '/groups/astuart/mlevine/contRNN/{}'.format(lower(FLAGS.ds_name))
 else:
     base_dir = 'output'
 output_dir = os.path.join(base_dir, FLAGS.output_dir)
@@ -77,21 +78,26 @@ logger.info('Using git branch "{}" on commit "{}"'.format(local_branch, sha))
 # load L63 data sampled at dt=0.01
 # dt=0.01
 if FLAGS.multi_traj:
-    train_path = os.path.join(local_path,'data/X_train_L63_multi_traj_short.npy')
+    train_path = os.path.join(local_path,'data/X_train_{}_multi_traj_short.npy').format(FLAGS.ds_name)
 else:
-    train_path = os.path.join(local_path,'data/X_train_L63_longer.npy')
-test_path = os.path.join(local_path,'data/X_test_L63.npy')
+    train_path = os.path.join(local_path,'data/X_train_{}_longer.npy').format(FLAGS.ds_name)
+
+if FLAGS.ds_name=='L63':
+    long_path = os.path.join(local_path,'data/X_test_{}.npy').format(FLAGS.ds_name)
+else:
+    long_path = os.path.join(local_path,'data/X_train_{}_longer.npy').format(FLAGS.ds_name)
 
 X_train = np.load(train_path)
-X_test  = np.load(test_path)
-X_val = X_test
+X_long  = np.load(long_path)
+if 'L96' in FLAGS.ds_name:
+    X_long = X_long[:9]
 
 # print('!!!!!!!!!!WARNING--using TEST DATA for training because it is bigger for now......!!!!!!!!!!!!!!')
 # X_train = X_test
 
 # X_train = X_train[:,1000:5000]
 logger.info('Train shape: {}'.format(X_train.shape))
-logger.info('Test shape: {}'.format(X_val.shape))
+logger.info('Test shape: {}'.format(X_long.shape))
 
 # create new RNN object
 my_rnn = Paper_NN(
@@ -138,7 +144,7 @@ FLAGS.output_dir = output_dir
 logger.info('N train ='.format(n_train))
 logger.info('Begin RNN training...')
 try:
-    train_model(my_rnn, X_train.T, X_val.T,
+    train_model(my_rnn, X_train.T, X_long.T,
                 logger=logger,
                 **FLAGS.__dict__)
 except Exception:

@@ -12,11 +12,15 @@ import torch
 from torch.utils.data import Dataset
 from odelibrary        import *
 from torchdiffeq import odeint_adjoint, odeint
-from plotting_utils import plot_logs
+from plotting_utils import plot_logs, train_plot
 from dynamical_models import L63_torch
 from timeit import default_timer
 import logging
 from pdb import set_trace as bp
+
+plt.rcParams.update({'font.size': 22, 'legend.fontsize': 12,
+                'legend.facecolor': 'white', 'legend.framealpha': 0.8,
+                'legend.loc': 'upper left', 'lines.linewidth': 4.0})
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -437,7 +441,7 @@ def train_model(model,
                 pre_trained=False,
                 do_normalization=False,
                 output_dir='output',
-                obs_inds=[0],
+                obs_inds=None,
                 dt=0.01,
                 use_true_xdot=False,
                 rhs_true=L63_torch,
@@ -455,6 +459,9 @@ def train_model(model,
                 cheat_normalization=True,
                 noisy_start=True,
                 **kwargs):
+
+    if obs_inds is None:
+        obs_inds = [k for k in range(model.dim_x)]
 
     fast_plot_interval = max(1, int(plot_interval / 10))
     # batch_size now refers to the number of windows selected in an epoch
@@ -583,7 +590,6 @@ def train_model(model,
             #         u0 = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=torch.Tensor([0, dt])))[-1]
             #     if j < (warmup-1) or noisy_start:
             #         u0 = torch.hstack( (x_noisy[:,j+1,:], u0[:,model.dim_x:]) )
-
             if backprop_warmup:
                 u0, upd_mean_vec = model.warmup(data=x_noisy[:,1:(warmup+1),:], u0=u0, dt=dt)
             else:
@@ -621,19 +627,14 @@ def train_model(model,
             if ep%plot_interval==0:
                 if batch <=5:
                     b=0
-                    K = u_pred.data.shape[-1]
-                    fig, axs = plt.subplots(nrows=K, figsize=(20, 10))
-                    for k in range(K):
-                        try:
-                            axs[k].plot(times_all[b].cpu().data, x[b,:,k].cpu().data, label='True State {}'.format(k), color='orange')
-                            axs[k].scatter(times_all[b].cpu().data, x_noisy[b,:,k].cpu().data, label='True State (noisy) {}'.format(k), color='orange')
-                        except:
-                            pass
-                        axs[k].plot(times[b].cpu().data, u_pred[:,b,k].cpu().data, label='NN-Predicted State {}'.format(k), color='blue')
-                        axs[k].scatter(times_all[b][:(warmup+1)].cpu().data, upd_mean_vec[:,b,k], label='NN-Assimilated State {}'.format(k), color='blue', marker='x')
-                        axs[k].legend()
-                    plt.savefig(os.path.join(plot_dir,'TrainPlot_Epoch{}_Batch{}'.format(ep,batch)))
-                    plt.close()
+                    output_path = os.path.join(plot_dir,'TrainPlot_Epoch{}_Batch{}'.format(ep,batch))
+                    train_plot(t_all=times_all[b].cpu().data, t=times[b].cpu().data,
+                                    x=x[b].cpu().data,
+                                    x_noisy=x_noisy[b].cpu().data,
+                                    u_pred=u_pred[:,b].cpu().data,
+                                    u_upd=upd_mean_vec[:,b],
+                                    warmup=warmup,
+                                    output_path=output_path)
 
         # regularized loss
         train_loss /= len(train_loader)
@@ -711,9 +712,10 @@ def train_model(model,
                     continue
 
                 # sol = my_solve_ivp( u0.numpy().reshape(-1), lambda t, y: model.rhs_numpy(y,t), t_eval, t_span, settings)
-                fig, axs = plt.subplots(nrows=1, figsize=(20, 10))
+                fig, axs = plt.subplots(constrained_layout=True, nrows=1, figsize=(20, 10))
                 axs.plot(t_eval[:len(sol)], sol)
-                plt.savefig(os.path.join(plot_dir,'ContinueTraining_Short_Epoch{}'.format(ep)))
+                axs.set_xlabel('Time')
+                plt.savefig(os.path.join(plot_dir,'ContinueTraining_Short_Epoch{}.pdf'.format(ep)), format='pdf')
                 plt.close()
 
                 T_long = 5e4
@@ -723,11 +725,12 @@ def train_model(model,
                 f_path = os.path.join(plot_dir,'ContinueTraining_Epoch{}'.format(ep))
                 try:
                     if gpu:
-                        test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu)
+                        test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu, obs_inds=obs_inds)
                     else:
-                        test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu)
-                except:
+                        test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu, obs_inds=obs_inds)
+                except Exception:
                     logger.info('Test Plots failed.')
+                    logger.exception(Exception)
                     logger.info('u0.shape={}'.format(u0.shape))
                     logger.info('sol_3d_true.shape={}'.format(X_long.shape))
 
@@ -746,7 +749,7 @@ def train_model(model,
     return model
 
 
-def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, T_long=5e3, output_path='outputs', logger=None, gpu=False):
+def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, T_long=5e3, output_path='outputs', logger=None, gpu=False, obs_inds=[0]):
 
     # rhs_nn(t, y)
     # rhs_true(t,y)
@@ -783,61 +786,46 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
     nn_max = len(sol_4d_nn)
     true_max = len(sol_3d_true)
 
-    ## Plot short term trajectories
-    n = min(nn_max, int(10/dt))
-    fig, axs = plt.subplots(figsize=(20, 10))
-    plt.plot(t_eval[:n],sol_3d_true[:n,0], label='True system')
-#     plt.plot(t_eval[:n],sol_4d_true[:n,0], label='L63 - 4D')
-    plt.plot(t_eval[:n],sol_4d_nn[:n,0], label='NN system')
-    plt.title('First coordinate (short-time)')
-    plt.legend()
-    plt.savefig(os.path.join(output_path, 'trajectory_short'))
-    plt.close()
+    len_dict = {'short': min(nn_max, int(10/dt)),
+                    'medium': min(nn_max, int(250/dt)),
+                    'long': nn_max}
+    for key in len_dict:
+        n = len_dict[key]
+        fig, axs = plt.subplots(constrained_layout=True, nrows=K, figsize=(15, 15), sharex=True)
+        for k in range(K):
+            axs[k].plot(t_eval[:n],sol_3d_true[:n,k], label='True 3D')
+    #         axs[k].plot(t_eval[:n],sol_4d_true[:n,k], label='True 4D')
+            axs[k].plot(t_eval[:n],sol_4d_nn[:n,k], label='NN 3D')
+            if k==0:
+                axs[k].legend()
+            axs[k].set_ylabel(r'$x_{}$'.format(k))
+        axs[k].set_xlabel('Time')
+        plt.savefig(os.path.join(output_path, 'trajectory_{}.pdf'.format(key)), format='pdf')
+        plt.close()
 
-    ## Plot medium term trajectories
-    n = min(nn_max, int(250/dt))
-    fig, axs = plt.subplots(nrows=3, figsize=(20, 10))
-    for k in range(K):
-        axs[k].plot(t_eval[:n],sol_3d_true[:n,k], label='True 3D')
-#         axs[k].plot(t_eval[:n],sol_4d_true[:n,k], label='True 4D')
-        axs[k].plot(t_eval[:n],sol_4d_nn[:n,k], label='NN 3D')
-        axs[k].legend()
-        axs[k].set_title('x_{}'.format(k))
-    plt.savefig(os.path.join(output_path, 'trajectory_medium'))
-    plt.close()
-
-    ## Plot full-length trajectories
-    fig, axs = plt.subplots(nrows=3, figsize=(20, 10))
-    for k in range(K):
-        axs[k].plot(dt*np.arange(len(sol_3d_true)),sol_3d_true[:,k], label='True 3D')
-        axs[k].plot(t_eval[:nn_max],sol_4d_nn[:nn_max,k], label='NN 3D')
-        axs[k].legend()
-        axs[k].set_title('x_{}'.format(k))
-    plt.savefig(os.path.join(output_path, 'trajectory_long'))
-    plt.close()
-
+    ## Plot combined invariant measure of all states
     ## Plot invariant measure of trajectories for full available time-window
     n = len(sol_3d_true) #int(1000/dt)
     n_burnin = int(0.1*n)
     fig, axs = plt.subplots(figsize=(20, 10))
-    sns.kdeplot(sol_3d_true[n_burnin:,0], label='True system')
+    sns.kdeplot(sol_3d_true[n_burnin:,obs_inds].reshape(-1), label='True system')
 #     sns.kdeplot(sol_4d_true[:n,0], label='L63 - 4D')
     n_burnin = int(0.1*nn_max)
-    sns.kdeplot(sol_4d_nn[n_burnin:,0], label='NN system')
+    sns.kdeplot(sol_4d_nn[n_burnin:,obs_inds].reshape(-1), label='NN system')
     plt.title('First coordinate KDE (all-time)')
     plt.legend()
-    plt.savefig(os.path.join(output_path, 'inv_long'))
+    plt.savefig(os.path.join(output_path, 'inv_stateAll_long.pdf'.format(k)), format='pdf')
     plt.close()
 
     ## Plot invariant measure of trajectories for specific time-window (e.g. pre-collapse)
     n = min(nn_max, int(100/dt))
     fig, axs = plt.subplots(figsize=(20, 10))
-    sns.kdeplot(sol_3d_true[:n,0], label='True system')
+    sns.kdeplot(sol_3d_true[:n,obs_inds].reshape(-1), label='True system')
 #     sns.kdeplot(sol_4d_true[:n,0], label='L63 - 4D')
-    sns.kdeplot(sol_4d_nn[:n,0], label='NN system')
+    sns.kdeplot(sol_4d_nn[:n,obs_inds].reshape(-1), label='NN system')
     plt.title('First coordinate KDE (pre-collapse, if any.)')
     plt.legend()
-    plt.savefig(os.path.join(output_path, 'inv_preCollapse'))
+    plt.savefig(os.path.join(output_path, 'inv_stateAll_preCollapse.pdf'.format(k)), format='pdf')
     plt.close()
 
     ## compute mean of last 10 Times of long timeseries

@@ -26,6 +26,21 @@ from scipy.interpolate import interpn
 # sns.set(rc={'text.usetex': True}, font_scale=4)
 from pdb import set_trace as bp
 
+def train_plot(t_all, t, x, x_noisy, u_pred, u_upd, warmup, output_path):
+    K = u_pred.data.shape[-1]
+    fig, axs = plt.subplots(constrained_layout=True, nrows=K, figsize=(15, K*3), sharex=True)
+    for k in range(K):
+        try:
+            axs[k].plot(t_all, x[:,k], label='True State {}'.format(k), color='orange')
+            axs[k].scatter(t_all, x_noisy[:,k], label='True State (noisy) {}'.format(k), color='orange')
+        except:
+            pass
+        axs[k].plot(t, u_pred[:,k], label='NN-Predicted State {}'.format(k), color='blue')
+        axs[k].scatter(t_all[:(warmup+1)], u_upd[:,k], label='NN-Assimilated State {}'.format(k), color='blue', marker='x')
+        axs[k].legend()
+    plt.savefig(output_path + '.pdf', format='pdf')
+    plt.close()
+
 def plot_logs(x, name, title, xlabel):
     fig, ax = plt.subplots(nrows=1, figsize=(20, 10))
     for key in x:
@@ -35,11 +50,11 @@ def plot_logs(x, name, title, xlabel):
     ax.set_xlabel(xlabel)
     plt.savefig(name)
     ax.set_xscale('log')
-    plt.savefig(name+'_xlog')
+    plt.savefig(name+'_xlog.pdf', format='pdf')
     ax.set_yscale('log')
-    plt.savefig(name+'_xlog_ylog')
+    plt.savefig(name+'_xlog_ylog.pdf', format='pdf')
     ax.set_xscale('linear')
-    plt.savefig(name+'_ylog')
+    plt.savefig(name+'_ylog.pdf', format='pdf')
     plt.close()
 
 def find_collapse(X, times=None, window=5000, true_mean=-0.07, true_sd=7.92):
