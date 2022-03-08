@@ -89,8 +89,8 @@ class UnitGaussianNormalizer(object):
             self.std = torch.std(x, inds).squeeze()
             obs_inds = [i for i in range(x.shape[1])]
         else:
-            self.mean = torch.mean(x[:,obs_inds,:], inds)
-            self.std = torch.std(x[:,obs_inds,:], inds)
+            self.mean = torch.mean(x[:,obs_inds], inds)
+            self.std = torch.std(x[:,obs_inds], inds)
 
         self.eps = eps
         self.obs_inds = obs_inds
@@ -107,21 +107,10 @@ class UnitGaussianNormalizer(object):
         # x = x.T
         return boo.T
 
-    def decode(self, x, sample_idx=None):
-        if sample_idx is None:
-            std = self.std + self.eps # n
-            mean = self.mean
-        else:
-            if len(self.mean.shape) == len(sample_idx[0].shape):
-                std = self.std[sample_idx] + self.eps  # batch*n
-                mean = self.mean[sample_idx]
-            if len(self.mean.shape) > len(sample_idx[0].shape):
-                std = self.std[:,sample_idx]+ self.eps # T*batch*n
-                mean = self.mean[:,sample_idx]
-
-        # x is in shape of batch*n or T*batch*n
-        x = (x * std) + mean
-        return x
+    def decode(self, x):
+        boo = x.T.clone()
+        boo[self.obs_inds] = ( self.mean + boo[self.obs_inds].T * (self.std + self.eps) ).T
+        return boo.T
 
     def cuda(self):
         self.mean = self.mean.cuda()
@@ -489,6 +478,9 @@ def train_model(model,
     x_test = torch.FloatTensor(X_validation)
 
     if do_normalization:
+        if cheat_normalization and model.dim_y != x_train.shape[1]:
+            logger.info('dim_y {} != x_train.shape[1] {}'.format(model.dim_y, x_train.shape[1]))
+            raise Exception("Cheat_normalization requires same hidden dimension as true system X.")
         logger.info('Doing normalization, go go!')
         x_normalizer = UnitGaussianNormalizer(x_train, cheat_normalization=cheat_normalization, obs_inds=obs_inds)
     else:
