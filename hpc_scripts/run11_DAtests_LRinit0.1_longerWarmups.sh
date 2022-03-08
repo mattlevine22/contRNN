@@ -7,6 +7,8 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --mem-per-cpu=2G   # memory per CPU core
 #SBATCH -J "run11_v3"   # job name
+#SBATCH --output=slurm/out-%x.%j.out
+#SBATCH --error=slurm/err-%x.%j.err
 
 module load python3/3.7.0
 module load gcc/9.2.0
