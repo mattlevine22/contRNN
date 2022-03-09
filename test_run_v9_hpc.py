@@ -20,6 +20,7 @@ import logging
 
 import argparse
 parser = argparse.ArgumentParser()
+parser.add_argument('--adjoint', default=0, type=int)
 parser.add_argument('--ds_name', default="L63", type=str)
 parser.add_argument('--T_long', default=5e3, type=float)
 parser.add_argument('--backprop_warmup', default=1, type=int)
@@ -108,6 +109,7 @@ logger.info('Test shape: {}'.format(X_long.shape))
 # create new RNN object
 my_rnn = Paper_NN(
                     logger=logger,
+                    adjoint=FLAGS.adjoint,
                     ds_name=FLAGS.ds_name,
                     gpu=FLAGS.gpu,
                     warmup_type=FLAGS.warmup_type,

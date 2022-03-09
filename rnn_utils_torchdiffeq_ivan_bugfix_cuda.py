@@ -24,6 +24,12 @@ plt.rcParams.update({'font.size': 22, 'legend.fontsize': 12,
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+def myodeint(func, y0, t, adjoint=False):
+    if adjoint:
+        return odeint_adjoint(func, y0, t)
+    else:
+        return odeint(func, y0, t)
+
 class TimeseriesDataset(Dataset):
     def __init__(self, x, times, window, warmup, target_cols, known_inits, obs_noise_sd, short_run=False):
         '''x is shape T (time) x D (space) x N (trajectories)'''
@@ -156,6 +162,7 @@ def get_bs(x, batch_size, window):
 
 class Paper_NN(torch.nn.Module):
             def __init__(self,
+                        adjoint=False,
                         ds_name='L63',
                         warmup_type='forcing',
                         logger=None,
@@ -176,6 +183,8 @@ class Paper_NN(torch.nn.Module):
                     logging.basicConfig(filename=log_fname, level=logging.INFO)
                     logger = logging.getLogger()
                 self.logger = logger
+
+                self.adjoint = adjoint
 
                 # assign parameter dimensions
                 self.n_layers = n_layers
@@ -377,7 +386,7 @@ class Paper_NN(torch.nn.Module):
                 upd_mean_vec = [u0_upd.cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
                     # predict
-                    u0_pred = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0_upd), t=tstep)[-1])
+                    u0_pred = self.x_normalizer.decode(mymyodeint(self, y0=self.x_normalizer.encode(u0_upd), t=tstep, adjoint=self.adjoint)[-1])
                     # update
                     u0_upd = u0_pred + (K @ (data[:,j,:].T - self.H @ u0_pred.T)).T
                     # u0_good = torch.hstack( (data[:,j,:], u0_pred[:,self.dim_x:]) )
@@ -397,7 +406,7 @@ class Paper_NN(torch.nn.Module):
                 upd_mean_vec = [u0.cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
                     # predict
-                    u0 = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0), t=tstep)[-1])
+                    u0 = self.x_normalizer.decode(myodeint(self, y0=self.x_normalizer.encode(u0), t=tstep, adjoint=self.adjoint)[-1])
                     # update
                     u0 = torch.hstack( (data[:,j,:], u0[:,self.dim_x:]) )
                     # save updates
@@ -427,7 +436,7 @@ class Paper_NN(torch.nn.Module):
                 upd_mean_vec = [torch.mean(u0_ensemble_upd, axis=1).cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
                     # predict ensemble
-                    u0_ensemble_pred = self.x_normalizer.decode(odeint(self.forward, y0=self.x_normalizer.encode(u0_ensemble_upd), t=tstep)[-1])
+                    u0_ensemble_pred = self.x_normalizer.decode(myodeint(self, y0=self.x_normalizer.encode(u0_ensemble_upd), t=tstep, adjoint=self.adjoint)[-1])
 
                     # compute predicted covariance
                     mean = torch.mean(u0_ensemble_pred, dim=1).unsqueeze(1)
@@ -458,6 +467,7 @@ class Paper_NN(torch.nn.Module):
 def train_model(model,
                 x_train,
                 X_long,
+                adjoint=False,
                 backprop_warmup=True,
                 short_run=False,
                 obs_noise_sd=0,
@@ -626,9 +636,9 @@ def train_model(model,
                     u0, upd_mean_vec = model.warmup(data=x_noisy[:,1:(warmup+1),:], u0=u0, dt=dt)
 
             if learn_inits_only:
-                u_pred = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0]).permute(0,2,1))
+                u_pred = x_normalizer.decode(myodeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0], adjoint=adjoint).permute(0,2,1))
             else:
-                u_pred = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=times[0]))
+                u_pred = x_normalizer.decode(myodeint(model, y0=x_normalizer.encode(u0), t=times[0], adjoint=adjoint))
 
             # compute losses
             loss = myloss(x_noisy[:,warmup:,:].permute(1,0,2), u_pred[:, :, :model.dim_x])
