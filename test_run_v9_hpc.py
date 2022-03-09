@@ -58,7 +58,7 @@ parser.add_argument('--output_dir', default='default_output', type=str)
 FLAGS = parser.parse_args()
 
 if FLAGS.hpc:
-    base_dir = '/groups/astuart/mlevine/contRNN/{}'.format(lower(FLAGS.ds_name))
+    base_dir = '/groups/astuart/mlevine/contRNN/{}'.format(FLAGS.ds_name.lower())
 else:
     base_dir = 'output'
 output_dir = os.path.join(base_dir, FLAGS.output_dir)
