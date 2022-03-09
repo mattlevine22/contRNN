@@ -2,7 +2,7 @@
 
 #Submit this script with: sbatch thefilename
 
-#SBATCH --time=72:00:00   # walltime
+#SBATCH --time=12:00:00   # walltime
 #SBATCH --ntasks=10   # number of processor cores (i.e. tasks)
 #SBATCH --gpus-per-task=1
 #SBATCH --mem-per-cpu=1G   # memory per CPU core
