@@ -486,6 +486,7 @@ def train_model(model,
                 plot_interval=1000,
                 cheat_normalization=True,
                 noisy_start=True,
+                T_long=5e3,
                 **kwargs):
 
     if obs_inds is None:
@@ -745,10 +746,6 @@ def train_model(model,
                 axs.set_xlabel('Time')
                 plt.savefig(os.path.join(plot_dir,'ContinueTraining_Short_Epoch{}.pdf'.format(ep)), format='pdf')
                 plt.close()
-
-                T_long = 5e4
-                if ep%plot_interval==0 and ep>0:
-                    T_long = 5e3
 
                 f_path = os.path.join(plot_dir,'ContinueTraining_Epoch{}'.format(ep))
                 try:

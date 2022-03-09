@@ -21,6 +21,7 @@ import logging
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--ds_name', default="L63", type=str)
+parser.add_argument('--T_long', default=5e3, type=float)
 parser.add_argument('--backprop_warmup', default=1, type=int)
 parser.add_argument('--warmup_type', default='forcing', type=str)
 parser.add_argument('--noisy_start', default=1, type=int)
@@ -77,15 +78,20 @@ logger.info('Using git branch "{}" on commit "{}"'.format(local_branch, sha))
 
 # load L63 data sampled at dt=0.01
 # dt=0.01
-if FLAGS.multi_traj:
-    train_path = os.path.join(local_path,'data/X_train_{}_multi_traj_short.npy').format(FLAGS.ds_name)
-else:
-    train_path = os.path.join(local_path,'data/X_train_{}_longer.npy').format(FLAGS.ds_name)
 
 if FLAGS.ds_name=='L63':
-    long_path = os.path.join(local_path,'data/X_test_{}.npy').format(FLAGS.ds_name)
+    if FLAGS.multi_traj:
+        train_path = os.path.join(local_path,'data/X_train_L63_multi_traj_short.npy')
+    else:
+        train_path = os.path.join(local_path,'data/X_train_L63_longer.npy')
+    long_path = os.path.join(local_path,'data/X_test_L63.npy')
 else:
+    FLAGS.T_long = 5e2
     long_path = os.path.join(local_path,'data/X_train_{}_longer.npy').format(FLAGS.ds_name)
+    if FLAGS.multi_traj:
+        train_path = os.path.join(local_path,'data/X_train_{}_multi_traj.npy').format(FLAGS.ds_name)
+    else:
+        train_path = long_path
 
 X_train = np.load(train_path)
 X_long  = np.load(long_path)
