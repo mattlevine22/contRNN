@@ -386,7 +386,7 @@ class Paper_NN(torch.nn.Module):
                 upd_mean_vec = [u0_upd.cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
                     # predict
-                    u0_pred = self.x_normalizer.decode(mymyodeint(self, y0=self.x_normalizer.encode(u0_upd), t=tstep, adjoint=self.adjoint)[-1])
+                    u0_pred = self.x_normalizer.decode(myodeint(self, y0=self.x_normalizer.encode(u0_upd), t=tstep, adjoint=self.adjoint)[-1])
                     # update
                     u0_upd = u0_pred + (K @ (data[:,j,:].T - self.H @ u0_pred.T)).T
                     # u0_good = torch.hstack( (data[:,j,:], u0_pred[:,self.dim_x:]) )
