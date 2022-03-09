@@ -86,22 +86,22 @@ if FLAGS.ds_name=='L63':
     else:
         train_path = os.path.join(local_path,'data/X_train_L63_longer.npy')
     long_path = os.path.join(local_path,'data/X_test_L63.npy')
+    X_train = np.load(train_path)
+    X_long  = np.load(long_path)
 else:
     FLAGS.T_long = 5e2
     long_path = os.path.join(local_path,'data/X_train_{}_longer.npy').format(FLAGS.ds_name)
+    X_long  = np.load(long_path)
+    X_long = X_long[:9]
     if FLAGS.multi_traj:
         train_path = os.path.join(local_path,'data/X_train_{}_multi_traj.npy').format(FLAGS.ds_name)
+        X_train = np.load(train_path)
+        X_train = X_train[:,:9]
     else:
-        train_path = long_path
-
-X_train = np.load(train_path)
-X_long  = np.load(long_path)
-if 'L96' in FLAGS.ds_name:
-    X_long = X_long[:9]
+        X_train = X_long
 
 # print('!!!!!!!!!!WARNING--using TEST DATA for training because it is bigger for now......!!!!!!!!!!!!!!')
 # X_train = X_test
-
 # X_train = X_train[:,1000:5000]
 logger.info('Train shape: {}'.format(X_train.shape))
 logger.info('Test shape: {}'.format(X_long.shape))
