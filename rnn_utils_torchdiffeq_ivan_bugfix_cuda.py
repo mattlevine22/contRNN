@@ -156,6 +156,7 @@ def get_bs(x, batch_size, window):
 
 class Paper_NN(torch.nn.Module):
             def __init__(self,
+                        ds_name='L63',
                         warmup_type='forcing',
                         logger=None,
                         n_layers=2,
@@ -180,6 +181,7 @@ class Paper_NN(torch.nn.Module):
                 self.n_layers = n_layers
                 self.use_bilinear = use_bilinear
                 self.use_f0 = use_f0
+                self.ds_name = ds_name
                 self.dim_x = dim_x
                 self.dim_y = dim_y
                 self.dim_hidden = dim_hidden
@@ -301,13 +303,39 @@ class Paper_NN(torch.nn.Module):
 
                 return inp
 
-            def f0(self, inp, sigma=10):
+            def f0(self, inp):
+                if self.ds_name=='L63':
+                    return self.f0_l63(inp)
+                elif 'L96' in self.ds_name:
+                    return self.f0_l96(inp)
+
+            def f0_l63(self, inp, sigma=10):
                 '''takes full [observed, hidden] state vector and returns [observed,hidden] vector.
                     inputs and outputs are in original coordinates.
                     input dimensions: N x state_dims'''
                 foo = torch.zeros_like(inp, dtype=torch.float)
                 foo[:,0] = -sigma*inp[:,0]
                 return foo
+
+            def f0_l96(self, x, F=10):
+                ''' Only slow variables of L96 model '''
+                K = self.dim_x
+                foo = torch.zeros_like(x, dtype=torch.float)
+
+                # three boundary cases: k = 0, k = 1, k = K-1
+                foo[:,0] = -x[:,K-1] * (x[:,K-2] - x[:,1]) - x[:,0]
+                foo[:,1] = -x[:,0] * (x[:,K-1] - x[:,2]) - x[:,1]
+                foo[:,K-1] = -x[:,K-2] * (x[:,K-3] - x[:,0]) - x[:,K-1]
+
+                # general case
+                for k in range(2, K-1):
+                  foo[:,k] = -x[:,k-1] * (x[:,k-2] - x[:,k+1]) - x[:,k]
+
+                # add forcing
+                foo[:,:K] += F
+
+                return foo
+
 
             def rhs_numpy(self, inp, t=0):
                 inp = torch.FloatTensor(inp.reshape(1,-1))

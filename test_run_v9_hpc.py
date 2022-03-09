@@ -102,6 +102,7 @@ logger.info('Test shape: {}'.format(X_long.shape))
 # create new RNN object
 my_rnn = Paper_NN(
                     logger=logger,
+                    ds_name=FLAGS.ds_name,
                     gpu=FLAGS.gpu,
                     warmup_type=FLAGS.warmup_type,
                     use_f0=FLAGS.use_f0,
