@@ -547,6 +547,7 @@ def train_model(model,
     bs_test = min(len(test_set), batch_size)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs_train, shuffle=shuffle, drop_last=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=bs_test, shuffle=False, drop_last=True)
+    logger.info('Effective batch_size: Training = {}, Testing = {}', bs_train, bs_test)
 
     # create initial conditions for each window
     my_list = ['y0']
