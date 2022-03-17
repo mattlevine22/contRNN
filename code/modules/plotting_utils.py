@@ -27,17 +27,21 @@ from scipy.interpolate import interpn
 from pdb import set_trace as bp
 
 def train_plot(t_all, t, x, x_noisy, u_pred, u_upd, warmup, output_path):
+    K_obs = x.shape[1]
     K = u_pred.data.shape[-1]
-    fig, axs = plt.subplots(constrained_layout=True, nrows=K, figsize=(15, K*3), sharex=True)
-    for k in range(K):
-        try:
-            axs[k].plot(t_all, x[:,k], label='True State {}'.format(k), color='orange')
-            axs[k].scatter(t_all, x_noisy[:,k], label='True State (noisy) {}'.format(k), color='orange')
-        except:
-            pass
-        axs[k].plot(t, u_pred[:,k], label='NN-Predicted State {}'.format(k), color='blue')
-        axs[k].scatter(t_all[:(warmup+1)], u_upd[:,k], label='NN-Assimilated State {}'.format(k), color='blue', marker='x')
-        axs[k].legend()
+    fig, axs = plt.subplots(constrained_layout=True, nrows=K_obs+1, figsize=(15, (K_obs+1)*3), sharex=True)
+    for k in range(K_obs):
+        axs[k].plot(t_all, x[:,k], label='True State {}'.format(k), color='orange')
+        axs[k].scatter(t_all, x_noisy[:,k], label='True State (noisy) {}'.format(k), color='orange')
+        axs[k].plot(t, u_pred[:,k], label='NN-Predicted Latent State')
+        axs[k].scatter(t_all[:(warmup+1)], u_upd[:,k], label='NN-Assimilated Latent State', marker='x')
+
+    axs[0].legend()
+    axs[-1].plot(t, u_pred[:,K_obs:], label='NN-Predicted Latent State')
+    axs[-1].plot(t_all[:(warmup+1)], u_upd[:,K_obs:], label='NN-Assimilated Latent State', marker='x')
+    black_x = matplotlib.lines.Line2D([], [], color='black', marker='x', markersize=15, label='NN-Assimilated Latent State')
+    black_line = matplotlib.lines.Line2D([], [], color='black', label='NN-Predicted Latent State')
+    axs[-1].legend(handles=[black_x, black_line])
     plt.savefig(output_path + '.pdf', format='pdf')
     plt.close()
 
