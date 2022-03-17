@@ -97,7 +97,7 @@ else:
     if FLAGS.multi_traj:
         train_path = os.path.join(local_path,'data/X_train_{}_multi_traj.npy').format(FLAGS.ds_name)
         X_train = np.load(train_path)
-        X_train = X_train[:,:9, 1600:]
+        X_train = X_train[:,:9]
     else:
         X_train = X_long
 
