@@ -16,6 +16,8 @@ from plotting_utils import plot_logs, train_plot
 from dynamical_models import L63_torch
 from timeit import default_timer
 import logging
+import signal
+from contextlib import contextmanager
 from pdb import set_trace as bp
 
 plt.rcParams.update({'font.size': 22, 'legend.fontsize': 12,
@@ -23,6 +25,27 @@ plt.rcParams.update({'font.size': 22, 'legend.fontsize': 12,
                 'legend.loc': 'upper left', 'lines.linewidth': 4.0})
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+class TimeoutException(Exception): pass
+
+@contextmanager
+def time_limit(seconds):
+    def signal_handler(signum, frame):
+        raise TimeoutException("Timed out!")
+    signal.signal(signal.SIGALRM, signal_handler)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+
+## USAGE
+# try:
+#     with time_limit(10):
+#         long_function_call()
+# except TimeoutException as e:
+#     print("Timed out!")
+
 
 def myodeint(func, y0, t, adjoint=False):
     if adjoint:
@@ -497,6 +520,7 @@ def train_model(model,
                 cheat_normalization=True,
                 noisy_start=True,
                 T_long=5e3,
+                eval_time_limit=600, # seconds
                 **kwargs):
 
     if obs_inds is None:
@@ -547,7 +571,8 @@ def train_model(model,
     bs_test = min(len(test_set), batch_size)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs_train, shuffle=shuffle, drop_last=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=bs_test, shuffle=False, drop_last=True)
-    logger.info('Effective batch_size: Training = {}, Testing = {}', bs_train, bs_test)
+    logger.info('Effective batch_size: Training = {}, Testing = {}'.format(bs_train, bs_test))
+    logger.info('Number of batches per epoch: Training = {}, Testing = {}'.format(len(train_loader), len(test_loader)))
 
     # create initial conditions for each window
     my_list = ['y0']
@@ -736,39 +761,45 @@ def train_model(model,
             test_loss_mse_history += [test_loss_mse]
 
             # now run long-term model eval-stuff
-            u0 = u_pred[-1,-1,:].cpu().data
-            if ep%plot_interval==0 and ep>0 and not learn_inits_only:
-                logger.info('solving for IC = {}'.format(u0))
-                t_eval = dt*np.arange(0, 5000)
-                # t_span = [t_eval[0], t_eval[-1]]
-                settings= {'method': 'RK45'}
-                try:
-                    if gpu:
-                        sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0.cuda()).reshape(1,-1), t=torch.Tensor(t_eval).cuda())).cpu().data.numpy().squeeze()
-                    else:
-                        sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0).reshape(1,-1), t=torch.Tensor(t_eval))).cpu().data.numpy().squeeze()
-                except:
-                    logger.info('Solver failed')
-                    continue
+            try:
+                with time_limit(eval_time_limit):
+                    logger.info('Starting long-term model evaluation runs')
+                    u0 = u_pred[-1,-1,:].cpu().data
+                    if ep%plot_interval==0 and ep>0 and not learn_inits_only:
+                        logger.info('solving for IC = {}'.format(u0))
+                        t_eval = dt*np.arange(0, 5000)
+                        # t_span = [t_eval[0], t_eval[-1]]
+                        settings= {'method': 'RK45'}
+                        try:
+                            if gpu:
+                                sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0.cuda()).reshape(1,-1), t=torch.Tensor(t_eval).cuda())).cpu().data.numpy().squeeze()
+                            else:
+                                sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0).reshape(1,-1), t=torch.Tensor(t_eval))).cpu().data.numpy().squeeze()
+                        except:
+                            logger.info('Solver failed')
+                            continue
 
-                # sol = my_solve_ivp( u0.numpy().reshape(-1), lambda t, y: model.rhs_numpy(y,t), t_eval, t_span, settings)
-                fig, axs = plt.subplots(constrained_layout=True, nrows=1, figsize=(20, 10))
-                axs.plot(t_eval[:len(sol)], sol)
-                axs.set_xlabel('Time')
-                plt.savefig(os.path.join(plot_dir,'ContinueTraining_Short_Epoch{}.pdf'.format(ep)), format='pdf')
-                plt.close()
+                        # sol = my_solve_ivp( u0.numpy().reshape(-1), lambda t, y: model.rhs_numpy(y,t), t_eval, t_span, settings)
+                        fig, axs = plt.subplots(constrained_layout=True, nrows=1, figsize=(20, 10))
+                        axs.plot(t_eval[:len(sol)], sol)
+                        axs.set_xlabel('Time')
+                        plt.savefig(os.path.join(plot_dir,'ContinueTraining_Short_Epoch{}.pdf'.format(ep)), format='pdf')
+                        plt.close()
 
-                f_path = os.path.join(plot_dir,'ContinueTraining_Epoch{}'.format(ep))
-                try:
-                    if gpu:
-                        test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu, obs_inds=obs_inds)
-                    else:
-                        test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu, obs_inds=obs_inds)
-                except Exception:
-                    logger.info('Test Plots failed.')
-                    logger.exception(Exception)
-                    logger.info('u0.shape={}'.format(u0.shape))
-                    logger.info('sol_3d_true.shape={}'.format(X_long.shape))
+                        f_path = os.path.join(plot_dir,'ContinueTraining_Epoch{}'.format(ep))
+                        try:
+                            if gpu:
+                                test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu, obs_inds=obs_inds)
+                            else:
+                                test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu, obs_inds=obs_inds)
+                        except Exception:
+                            logger.info('Test Plots failed.')
+                            logger.exception(Exception)
+                            logger.info('u0.shape={}'.format(u0.shape))
+                            logger.info('sol_3d_true.shape={}'.format(X_long.shape))
+                logger.info('Finished long-term model evaluation runs.')
+            except TimeoutException as e:
+                logger.info('Finished long-term model evaluation runs [TIMED OUT].')
 
         # report summary stats
         if ep%fast_plot_interval==0:
