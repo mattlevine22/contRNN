@@ -69,7 +69,7 @@ os.makedirs(output_dir, exist_ok=True)
 dict_to_file(mydict=FLAGS.__dict__, fname=os.path.join(output_dir,"settings.log"))
 
 log_fname = os.path.join(output_dir,"logfile.log")
-logging.basicConfig(filename=log_fname, level=logging.INFO, format="%(message)s \t %(asctime)s")
+logging.basicConfig(filename=log_fname, level=logging.DEBUG, format="%(message)s \t %(asctime)s")
 logger = logging.getLogger()
 logger.info('###### BEGIN EXPERIMENT  #########')
 

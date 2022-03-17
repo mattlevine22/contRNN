@@ -655,16 +655,20 @@ def train_model(model,
             #         u0 = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=torch.Tensor([0, dt])))[-1]
             #     if j < (warmup-1) or noisy_start:
             #         u0 = torch.hstack( (x_noisy[:,j+1,:], u0[:,model.dim_x:]) )
+            t0_local = default_timer()
             if backprop_warmup:
                 u0, upd_mean_vec = model.warmup(data=x_noisy[:,1:(warmup+1),:], u0=u0, dt=dt)
             else:
                 with torch.no_grad():
                     u0, upd_mean_vec = model.warmup(data=x_noisy[:,1:(warmup+1),:], u0=u0, dt=dt)
+            logger.debug('Training warmup took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
+            t0_local = default_timer()
             if learn_inits_only:
                 u_pred = x_normalizer.decode(myodeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0], adjoint=adjoint).permute(0,2,1))
             else:
                 u_pred = x_normalizer.decode(myodeint(model, y0=x_normalizer.encode(u0), t=times[0], adjoint=adjoint))
+            logger.debug('Training prediction took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
             # compute losses
             loss = myloss(x_noisy[:,warmup:,:].permute(1,0,2), u_pred[:, :, :model.dim_x])
@@ -674,7 +678,9 @@ def train_model(model,
             end_point_loss = lambda_endpoints * myloss(yend, u_pred[-1, :, model.dim_x:])
             loss += end_point_loss
 
+            t0_local = default_timer()
             loss.backward()
+            logger.debug('loss.backward() took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
             # compute gradient norms for monitoring
             grad_norm_pre_clip += model.compute_grad_norm()
@@ -701,7 +707,7 @@ def train_model(model,
                                     u_upd=upd_mean_vec[:,b],
                                     warmup=warmup,
                                     output_path=output_path)
-                    logger.info('Train Plot took {} seconds'.format(round(default_timer() - t0_local, 2)))
+                    logger.debug('Train Plot took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
         # regularized loss
         train_loss /= len(train_loader)
@@ -738,12 +744,16 @@ def train_model(model,
                     u0 = u0.cuda()
 
                 # run forward model
+                t0_local = default_timer()
                 u0, upd_mean_vec = model.warmup(data=x_noisy[:,1:(warmup+1),:], u0=u0, dt=dt)
+                logger.debug('Testing warmup took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
+                t0_local = default_timer()
                 if learn_inits_only:
                     u_pred = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0]).permute(0,2,1))
                 else:
                     u_pred = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=times[0]))
+                logger.debug('Testing prediction took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
                 # compute losses
                 loss = myloss(x_noisy[:,warmup:,:].permute(1,0,2), u_pred[:, :, :model.dim_x])
@@ -763,11 +773,11 @@ def train_model(model,
             test_loss_mse_history += [test_loss_mse]
 
             # now run long-term model eval-stuff
-            try:
-                with time_limit(eval_time_limit):
-                    logger.info('Starting long-term model evaluation runs')
-                    u0 = u_pred[-1,-1,:].cpu().data
-                    if ep%plot_interval==0 and ep>0 and not learn_inits_only:
+            u0 = u_pred[-1,-1,:].cpu().data
+            if ep%plot_interval==0 and ep>0 and not learn_inits_only:
+                try:
+                    with time_limit(eval_time_limit):
+                        logger.info('Starting long-term model evaluation runs')
                         logger.info('solving for IC = {}'.format(u0))
                         t_eval = dt*np.arange(0, 5000)
                         # t_span = [t_eval[0], t_eval[-1]]
@@ -799,9 +809,9 @@ def train_model(model,
                             logger.exception(Exception)
                             logger.info('u0.shape={}'.format(u0.shape))
                             logger.info('sol_3d_true.shape={}'.format(X_long.shape))
-                logger.info('Finished long-term model evaluation runs.')
-            except TimeoutException as e:
-                logger.info('Finished long-term model evaluation runs [TIMED OUT].')
+                        logger.info('Finished long-term model evaluation runs without interruption.')
+                except TimeoutException as e:
+                    logger.info('Finished long-term model evaluation runs [TIMED OUT].')
 
         # report summary stats
         if ep%fast_plot_interval==0:
