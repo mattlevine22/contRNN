@@ -693,6 +693,7 @@ def train_model(model,
                 if batch <=5:
                     b=0
                     output_path = os.path.join(plot_dir,'TrainPlot_Epoch{}_Batch{}'.format(ep,batch))
+                    t0_local = default_timer()
                     train_plot(t_all=times_all[b].cpu().data, t=times[b].cpu().data,
                                     x=x[b].cpu().data,
                                     x_noisy=x_noisy[b].cpu().data,
@@ -700,6 +701,7 @@ def train_model(model,
                                     u_upd=upd_mean_vec[:,b],
                                     warmup=warmup,
                                     output_path=output_path)
+                    logger.info('Train Plot took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
         # regularized loss
         train_loss /= len(train_loader)
