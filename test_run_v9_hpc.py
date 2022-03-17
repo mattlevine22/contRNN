@@ -13,7 +13,7 @@ from torchdiffeq import odeint
 from dynamical_models import L63_torch
 from rnn_utils_torchdiffeq_ivan_bugfix_cuda import Paper_NN, train_model
 from pdb import set_trace as bp
-from hpc_utils import dict_to_file
+from hpc_utils import dict_to_file, addLoggingLevel
 from git import Repo
 
 import logging
@@ -69,7 +69,8 @@ os.makedirs(output_dir, exist_ok=True)
 dict_to_file(mydict=FLAGS.__dict__, fname=os.path.join(output_dir,"settings.log"))
 
 log_fname = os.path.join(output_dir,"logfile.log")
-logging.basicConfig(filename=log_fname, level=logging.DEBUG, format="%(message)s \t %(asctime)s")
+addLoggingLevel(levelName='EXTRA', levelNum=logging.DEBUG + 5)
+logging.basicConfig(filename=log_fname, level=logging.EXTRA, format="%(message)s \t %(asctime)s")
 logger = logging.getLogger()
 logger.info('###### BEGIN EXPERIMENT  #########')
 

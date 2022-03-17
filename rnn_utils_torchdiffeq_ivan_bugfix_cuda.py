@@ -661,14 +661,14 @@ def train_model(model,
             else:
                 with torch.no_grad():
                     u0, upd_mean_vec = model.warmup(data=x_noisy[:,1:(warmup+1),:], u0=u0, dt=dt)
-            logger.debug('Training warmup took {} seconds'.format(round(default_timer() - t0_local, 2)))
+            logger.extra('Training warmup took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
             t0_local = default_timer()
             if learn_inits_only:
                 u_pred = x_normalizer.decode(myodeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0], adjoint=adjoint).permute(0,2,1))
             else:
                 u_pred = x_normalizer.decode(myodeint(model, y0=x_normalizer.encode(u0), t=times[0], adjoint=adjoint))
-            logger.debug('Training prediction took {} seconds'.format(round(default_timer() - t0_local, 2)))
+            logger.extra('Training prediction took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
             # compute losses
             loss = myloss(x_noisy[:,warmup:,:].permute(1,0,2), u_pred[:, :, :model.dim_x])
@@ -680,7 +680,7 @@ def train_model(model,
 
             t0_local = default_timer()
             loss.backward()
-            logger.debug('loss.backward() took {} seconds'.format(round(default_timer() - t0_local, 2)))
+            logger.extra('loss.backward() took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
             # compute gradient norms for monitoring
             grad_norm_pre_clip += model.compute_grad_norm()
@@ -707,7 +707,7 @@ def train_model(model,
                                     u_upd=upd_mean_vec[:,b],
                                     warmup=warmup,
                                     output_path=output_path)
-                    logger.debug('Train Plot took {} seconds'.format(round(default_timer() - t0_local, 2)))
+                    logger.extra('Train Plot took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
         # regularized loss
         train_loss /= len(train_loader)
@@ -746,14 +746,14 @@ def train_model(model,
                 # run forward model
                 t0_local = default_timer()
                 u0, upd_mean_vec = model.warmup(data=x_noisy[:,1:(warmup+1),:], u0=u0, dt=dt)
-                logger.debug('Testing warmup took {} seconds'.format(round(default_timer() - t0_local, 2)))
+                logger.extra('Testing warmup took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
                 t0_local = default_timer()
                 if learn_inits_only:
                     u_pred = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0]).permute(0,2,1))
                 else:
                     u_pred = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=times[0]))
-                logger.debug('Testing prediction took {} seconds'.format(round(default_timer() - t0_local, 2)))
+                logger.extra('Testing prediction took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
                 # compute losses
                 loss = myloss(x_noisy[:,warmup:,:].permute(1,0,2), u_pred[:, :, :model.dim_x])
