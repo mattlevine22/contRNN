@@ -409,7 +409,7 @@ def train_model(model,
                 gn_dict = {'Layer {}'.format(l): np.array(grad_norm_post_clip_history)[:,l] for l in range(len(grad_norm_post_clip))}
                 plot_logs(x=gn_dict, name=os.path.join(summary_dir,'grad_norm_post_clip'), title='Gradient Norms (Post-Clip)', xlabel='Epochs')
 
-                if ep%(10*plot_interval)==0:
+                if ep%(10*plot_interval)==0 and ep>0:
                     outdir = os.path.join(plot_dir, 'epoch{}'.format(ep))
                     Tl = T_long
                     evt = eval_time_limit
