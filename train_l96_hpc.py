@@ -21,7 +21,7 @@ import logging
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--ds_name', default="L96Meps-1", type=str)
-parser.add_argument('--T_long', default=10, type=float)
+parser.add_argument('--T_long', default=500, type=float)
 parser.add_argument('--eval_time_limit', default=600, type=int) # (seconds) limit time of test solutions (abort if taking too long and continue training)
 parser.add_argument('--short_run', default=0, type=int)
 parser.add_argument('--cheat_normalization', default=0, type=int)
@@ -42,7 +42,7 @@ parser.add_argument('--use_bilinear', default=0, type=int)
 parser.add_argument('--gpu', default=0, type=int)
 parser.add_argument('--epochs', default=1000, type=int)
 parser.add_argument('--dt', default=0.01, type=float)
-parser.add_argument('--plot_interval', default=10, type=int)
+parser.add_argument('--plot_interval', default=100, type=int)
 parser.add_argument('--output_dir', default='default_output', type=str)
 FLAGS = parser.parse_args()
 
@@ -77,7 +77,6 @@ if FLAGS.ds_name=='L63':
     X_train = np.load(train_path)
     X_long  = np.load(long_path)
 else:
-    FLAGS.T_long = 5e2
     long_path = os.path.join(local_path,'data/X_train_{}_longer.npy').format(FLAGS.ds_name)
     X_long  = np.load(long_path)
     # X_long = X_long[:9,:-200000]

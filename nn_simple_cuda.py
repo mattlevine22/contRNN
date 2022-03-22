@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 from scipy.linalg import pinv
+from statsmodels.tsa.stattools import acf
 import torch
 from torch.utils.data import Dataset
 from torchdiffeq import odeint_adjoint, odeint
@@ -17,6 +18,7 @@ from timeit import default_timer
 import logging
 import signal
 from contextlib import contextmanager
+import pandas as pd
 from pdb import set_trace as bp
 
 plt.rcParams.update({'font.size': 22, 'legend.fontsize': 12,
@@ -246,7 +248,7 @@ def train_model(model,
                 max_grad_norm=0,
                 shuffle=False,
                 plot_interval=1000,
-                T_long=5e3,
+                T_long=5e2,
                 eval_time_limit=600, # seconds
                 **kwargs):
 
@@ -407,26 +409,28 @@ def train_model(model,
                 gn_dict = {'Layer {}'.format(l): np.array(grad_norm_post_clip_history)[:,l] for l in range(len(grad_norm_post_clip))}
                 plot_logs(x=gn_dict, name=os.path.join(summary_dir,'grad_norm_post_clip'), title='Gradient Norms (Post-Clip)', xlabel='Epochs')
 
-                if ep%plot_interval==0:
+                if ep%(10*plot_interval)==0:
                     outdir = os.path.join(plot_dir, 'epoch{}'.format(ep))
-                    T_long = 500
+                    Tl = T_long
                     evt = eval_time_limit
-                else:
+                elif ep%plot_interval==0:
                     outdir = os.path.join(plot_dir, 'afast_plots/epoch{}'.format(ep))
-                    T_long = 10
+                    Tl = T_long/100
                     evt = int(eval_time_limit/100)
 
+                t0_local = default_timer()
                 x0 = x_input[0].squeeze()
                 try:
                     with time_limit(evt):
-                        test_plots(x0=x0, sol_3d_true=x_input, rhs_nn=model.rhs, rhs_true=model.ode.full,  T_long=T_long, output_path=outdir, obs_inds=[k for k in range(model.dim_x)])
+                        test_plots(x0=x0, logger=logger, sol_3d_true=x_input, rhs_nn=model.rhs, rhs_true=model.ode.full,  T_long=Tl, output_path=outdir, obs_inds=[k for k in range(model.dim_x)])
                 except TimeoutException as e:
                     logger.info('Finished long-term model evaluation runs [TIMED OUT].')
+                logger.extra('Test plots took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
     return model
 
 
-def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, T_long=5e1, output_path='outputs', obs_inds=[0], gpu=False):
+def test_plots(x0, logger, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, T_long=5e1, output_path='outputs', obs_inds=[0], gpu=False, Tacf=10):
 
     if sol_3d_true is None and rhs_true is None:
         raise('Must specify either a true RHS or a true solution')
@@ -505,6 +509,43 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
     plt.title('First coordinate KDE (pre-collapse, if any.)')
     plt.legend()
     plt.savefig(os.path.join(output_path, 'inv_stateAll_preCollapse.pdf'.format(k)), format='pdf')
+    plt.close()
+
+    ## Plot Autocorrelation Function
+    n_burnin_approx = int(0.1*len(sol_4d_nn))
+    n_burnin_true = int(0.1*len(sol_3d_true))
+    Tacf = min(Tacf, n_burnin_true, n_burnin_approx)
+    nlags = int(Tacf/dt) - 1
+    lag_vec = dt*np.arange(0,nlags+1)
+
+    acf_error_all = []
+    df = pd.DataFrame()
+    for k in obs_inds:
+        acf_approx = acf(sol_4d_nn[n_burnin_approx:,k], fft=True, nlags=nlags) #look at first component
+        acf_true = acf(sol_3d_true[n_burnin_true:,k].data.numpy(), fft=True, nlags=nlags) #look at first component
+        acf_error = np.mean((acf_true - acf_approx)**2)
+        acf_error_all.append(acf_error)
+
+        df_approx = pd.DataFrame({'Time Lag': lag_vec, 'ACF': acf_approx, 'Type': 'NN system', 'State': k})
+        df_true = pd.DataFrame({'Time Lag': lag_vec, 'ACF': acf_true, 'Type': 'True system', 'State': k})
+        df = pd.concat([df, df_approx, df_true], ignore_index=True)
+
+        fig, axs = plt.subplots(figsize=(20, 10))
+        axs.plot(lag_vec, acf_true, label='True system')
+        axs.plot(lag_vec, acf_approx, label='NN system')
+        axs.set_xlabel('Time Lag')
+        plt.title('Autocorrelation Functions (component {})'.format(k))
+        plt.legend()
+        plt.savefig(os.path.join(output_path, 'acf_{}.pdf'.format(k)), format='pdf')
+        plt.close()
+
+    acf_error_all = np.array(acf_error_all)
+    logger.info('ACF MSE = {} +/- {} (T_long = {})'.format(np.mean(acf_error_all), np.std(acf_error_all), T_long))
+
+    fig, axs = plt.subplots(figsize=(20, 10))
+    sns.lineplot(data=df, x='Time Lag', y='ACF', hue='Type', ci='sd')
+    plt.legend()
+    plt.savefig(os.path.join(output_path, 'acf_combined.pdf'), format='pdf')
     plt.close()
 
 #     ## compute mean of last 10 Times of long timeseries
