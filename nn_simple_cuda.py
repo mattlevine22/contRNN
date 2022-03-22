@@ -279,6 +279,11 @@ def train_model(model,
     else:
         x_normalizer = TrivialNormalizer(x_input)
         y_normalizer = TrivialNormalizer(y_output)
+
+    # normalize data
+    x_normalized = x_normalizer.encode(x_input)
+    ydot_normalized = y_normalizer.encode(y_output)
+
     if gpu:
         x_normalizer.cuda()
         y_normalizer.cuda()
@@ -286,9 +291,6 @@ def train_model(model,
     model.y_normalizer = y_normalizer
 
 
-    # normalize data
-    x_normalized = x_normalizer.encode(x_input)
-    ydot_normalized = y_normalizer.encode(y_output)
 
     # make dataset
     full_dataset = torch.utils.data.TensorDataset(x_normalized, ydot_normalized)
