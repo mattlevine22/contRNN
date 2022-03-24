@@ -430,7 +430,7 @@ def train_model(model,
                 logger.extra('Test plots took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
     # run final test plots
-    for tl in [T_long, T_long*5]
+    for tl in [T_long, T_long*5]:
         outdir = os.path.join(plot_dir, 'final_Tlong{}'.format(tl))
         t0_local = default_timer()
         x0 = x_input[0].squeeze()
