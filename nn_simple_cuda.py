@@ -259,6 +259,8 @@ def train_model(model,
     # batch_size now refers to the number of windows selected in an epoch
     # window refers to the size of a given window
 
+    sol_3d_true_kde = None
+
     # make output directory
     os.makedirs(output_dir, exist_ok=True)
     if logger is None:
@@ -422,7 +424,7 @@ def train_model(model,
                 x0 = x_input[0].squeeze()
                 try:
                     with time_limit(evt):
-                        test_plots(x0=x0, logger=logger, sol_3d_true=x_input, rhs_nn=model.rhs, rhs_true=model.ode.full,  T_long=Tl, output_path=outdir, obs_inds=[k for k in range(model.dim_x)])
+                        sol_3d_true_kde = test_plots(x0=x0, logger=logger, sol_3d_true=x_input, sol_3d_true_kde=sol_3d_true_kde, rhs_nn=model.rhs, rhs_true=model.ode.full,  T_long=Tl, output_path=outdir, obs_inds=[k for k in range(model.dim_x)])
                 except TimeoutException as e:
                     logger.info('Finished long-term model evaluation runs [TIMED OUT].')
                 logger.extra('Test plots took {} seconds'.format(round(default_timer() - t0_local, 2)))
@@ -431,13 +433,13 @@ def train_model(model,
     outdir = os.path.join(plot_dir, 'final{}'.format(ep))
     t0_local = default_timer()
     x0 = x_input[0].squeeze()
-    test_plots(x0=x0, logger=logger, sol_3d_true=x_input, rhs_nn=model.rhs, rhs_true=model.ode.full,  T_long=Tl, output_path=outdir, obs_inds=[k for k in range(model.dim_x)])
+    test_plots(x0=x0, logger=logger, sol_3d_true=x_input, sol_3d_true_kde=sol_3d_true_kde, rhs_nn=model.rhs, rhs_true=model.ode.full,  T_long=Tl, output_path=outdir, obs_inds=[k for k in range(model.dim_x)])
     logger.extra('FINAL Test plots took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
     return model
 
 
-def test_plots(x0, logger, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, T_long=5e1, output_path='outputs', obs_inds=[0], gpu=False, Tacf=10):
+def test_plots(x0, logger, rhs_nn, nn_normalizer=None, sol_3d_true=None, sol_3d_true_kde=None, rhs_true=None, T_long=5e1, output_path='outputs', obs_inds=[0], gpu=False, Tacf=10, kde_subsample=500000):
 
     if sol_3d_true is None and rhs_true is None:
         raise('Must specify either a true RHS or a true solution')
@@ -498,10 +500,13 @@ def test_plots(x0, logger, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_tru
     n = len(sol_3d_true) #int(1000/dt)
     n_burnin = int(0.1*n)
     fig, axs = plt.subplots(figsize=(20, 10))
-    sns.kdeplot(sol_3d_true[n_burnin:,obs_inds].reshape(-1), label='True system')
+    if sol_3d_true_kde is None:
+        sol_3d_true_kde = sns.kdeplot(np.random.choice(sol_3d_true[n_burnin:,obs_inds].reshape(-1), size=kde_subsample), label='True system').get_lines()[0].get_data()
+    else:
+        axs.plot(sol_3d_true_kde[0], sol_3d_true_kde[1], label='True system')
 #     sns.kdeplot(sol_4d_true[:n,0], label='L63 - 4D')
     n_burnin = int(0.1*nn_max)
-    sns.kdeplot(sol_4d_nn[n_burnin:,obs_inds].reshape(-1), label='NN system')
+    sns.kdeplot(np.random.choice(sol_4d_nn[n_burnin:,obs_inds].reshape(-1), size=kde_subsample), label='NN system')
     plt.title('First coordinate KDE (all-time)')
     plt.legend()
     plt.savefig(os.path.join(output_path, 'inv_stateAll_long.pdf'.format(k)), format='pdf')
@@ -510,9 +515,9 @@ def test_plots(x0, logger, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_tru
     ## Plot invariant measure of trajectories for specific time-window (e.g. pre-collapse)
     n = min(nn_max, int(100/dt))
     fig, axs = plt.subplots(figsize=(20, 10))
-    sns.kdeplot(sol_3d_true[:n,obs_inds].reshape(-1), label='True system')
+    axs.plot(sol_3d_true_kde[0], sol_3d_true_kde[1], label='True system')
 #     sns.kdeplot(sol_4d_true[:n,0], label='L63 - 4D')
-    sns.kdeplot(sol_4d_nn[:n,obs_inds].reshape(-1), label='NN system')
+    sns.kdeplot(np.random.choice(sol_4d_nn[:n,obs_inds].reshape(-1), size=kde_subsample), label='NN system')
     plt.title('First coordinate KDE (pre-collapse, if any.)')
     plt.legend()
     plt.savefig(os.path.join(output_path, 'inv_stateAll_preCollapse.pdf'.format(k)), format='pdf')
@@ -521,7 +526,7 @@ def test_plots(x0, logger, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_tru
     ## Plot Autocorrelation Function
     n_burnin_approx = int(0.1*len(sol_4d_nn))
     n_burnin_true = int(0.1*len(sol_3d_true))
-    Tacf = min(Tacf, n_burnin_true, n_burnin_approx)
+    Tacf = min(Tacf, dt*(len(sol_4d_nn) - n_burnin_approx)/2, dt*(len(sol_3d_true) - n_burnin_true)/2)
     nlags = int(Tacf/dt) - 1
     lag_vec = dt*np.arange(0,nlags+1)
 
@@ -565,4 +570,4 @@ def test_plots(x0, logger, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_tru
 #     logger.info('X_approx(T_end) {}'.format(sol_4d_nn[-1:,:]))
 #     logger.info('X_true(T_end) {}'.format(sol_3d_true[-1:,:]))
 
-    return
+    return sol_3d_true_kde
