@@ -430,10 +430,10 @@ def train_model(model,
                 logger.extra('Test plots took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
     # run final test plots
-    outdir = os.path.join(plot_dir, 'final{}'.format(ep))
+    outdir = os.path.join(plot_dir, 'final')
     t0_local = default_timer()
     x0 = x_input[0].squeeze()
-    test_plots(x0=x0, logger=logger, sol_3d_true=x_input, sol_3d_true_kde=sol_3d_true_kde, rhs_nn=model.rhs, rhs_true=model.ode.full,  T_long=Tl, output_path=outdir, obs_inds=[k for k in range(model.dim_x)])
+    test_plots(x0=x0, logger=logger, sol_3d_true=x_input, sol_3d_true_kde=sol_3d_true_kde, rhs_nn=model.rhs, rhs_true=model.ode.full,  T_long=T_long, output_path=outdir, obs_inds=[k for k in range(model.dim_x)])
     logger.extra('FINAL Test plots took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
     return model
@@ -456,9 +456,11 @@ def test_plots(x0, logger, rhs_nn, nn_normalizer=None, sol_3d_true=None, sol_3d_
     # solve true 3D ODE at initial condition x0
     if sol_3d_true is None:
 #         sol_3d_true = my_solve_ivp( x0.reshape(-1), rhs_true, t_eval, t_span, settings)
+        t0_local = default_timer()
         sol_3d_true = odeint(rhs_true, y0=x0, t=torch.Tensor(t_eval)).squeeze(1)
+        logger.extra('Solving True-system for T_long={} took {} seconds'.format(T_long, round(default_timer() - t0_local, 2)))
 
-
+    t0_local = default_timer()
     K = len(obs_inds)
     # solve approximate 3D ODE at initial condition x0
     if nn_normalizer is None:
@@ -474,6 +476,7 @@ def test_plots(x0, logger, rhs_nn, nn_normalizer=None, sol_3d_true=None, sol_3d_
             sol_4d_nn = odeint(rhs_nn, y0=nn_normalizer.encode(x0).reshape(-1), t=torch.Tensor(t_eval)).squeeze(1)
 
         sol_4d_nn = nn_normalizer.decode(sol_4d_nn).cpu().data.numpy()
+    logger.extra('Solving NN-system for T_long={} took {} seconds'.format(T_long, round(default_timer() - t0_local, 2)))
 
     nn_max = len(sol_4d_nn)
     true_max = len(sol_3d_true)
@@ -497,6 +500,7 @@ def test_plots(x0, logger, rhs_nn, nn_normalizer=None, sol_3d_true=None, sol_3d_
 
     ## Plot combined invariant measure of all states
     ## Plot invariant measure of trajectories for full available time-window
+    t0_local = default_timer()
     n = len(sol_3d_true) #int(1000/dt)
     n_burnin = int(0.1*n)
     fig, axs = plt.subplots(figsize=(20, 10))
@@ -522,8 +526,10 @@ def test_plots(x0, logger, rhs_nn, nn_normalizer=None, sol_3d_true=None, sol_3d_
     plt.legend()
     plt.savefig(os.path.join(output_path, 'inv_stateAll_preCollapse.pdf'.format(k)), format='pdf')
     plt.close()
+    logger.extra('Plotting invariant measures took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
     ## Plot Autocorrelation Function
+    t0_local = default_timer()
     n_burnin_approx = int(0.1*len(sol_4d_nn))
     n_burnin_true = int(0.1*len(sol_3d_true))
     Tacf = min(Tacf, dt*(len(sol_4d_nn) - n_burnin_approx)/2, dt*(len(sol_3d_true) - n_burnin_true)/2)
@@ -552,13 +558,13 @@ def test_plots(x0, logger, rhs_nn, nn_normalizer=None, sol_3d_true=None, sol_3d_
         plt.close()
 
     acf_error_all = np.array(acf_error_all)
-    logger.info('ACF MSE = {} +/- {} (T_long = {})'.format(np.mean(acf_error_all), np.std(acf_error_all), T_long))
 
     fig, axs = plt.subplots(figsize=(20, 10))
-    sns.lineplot(data=df, x='Time Lag', y='ACF', hue='Type', ci='sd')
+    sns.lineplot(data=df, x='Time Lag', y='ACF', hue='Type', ci='sd', hue_order=['True system', 'NN system'])
     plt.legend()
     plt.savefig(os.path.join(output_path, 'acf_combined.pdf'), format='pdf')
     plt.close()
+    logger.info('ACF MSE = {} +/- {} (T_long = {}) [took {} sec]'.format(np.mean(acf_error_all), np.std(acf_error_all), T_long, round(default_timer() - t0_local, 2)))
 
 #     ## compute mean of last 10 Times of long timeseries
 #     n = min(nn_max, int(10 / dt))
