@@ -427,6 +427,13 @@ def train_model(model,
                     logger.info('Finished long-term model evaluation runs [TIMED OUT].')
                 logger.extra('Test plots took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
+    # run final test plots
+    outdir = os.path.join(plot_dir, 'final{}'.format(ep))
+    t0_local = default_timer()
+    x0 = x_input[0].squeeze()
+    test_plots(x0=x0, logger=logger, sol_3d_true=x_input, rhs_nn=model.rhs, rhs_true=model.ode.full,  T_long=Tl, output_path=outdir, obs_inds=[k for k in range(model.dim_x)])
+    logger.extra('FINAL Test plots took {} seconds'.format(round(default_timer() - t0_local, 2)))
+
     return model
 
 
