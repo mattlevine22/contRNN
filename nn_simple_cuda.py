@@ -418,7 +418,7 @@ def train_model(model,
                 elif ep%plot_interval==0:
                     outdir = os.path.join(plot_dir, 'afast_plots/epoch{}'.format(ep))
                     Tl = T_long/100
-                    evt = int(eval_time_limit/100)
+                    evt = int(eval_time_limit/10)
 
                 t0_local = default_timer()
                 x0 = x_input[0].squeeze()
@@ -430,11 +430,12 @@ def train_model(model,
                 logger.extra('Test plots took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
     # run final test plots
-    outdir = os.path.join(plot_dir, 'final')
-    t0_local = default_timer()
-    x0 = x_input[0].squeeze()
-    test_plots(x0=x0, logger=logger, sol_3d_true=x_input, sol_3d_true_kde=sol_3d_true_kde, rhs_nn=model.rhs, rhs_true=model.ode.full,  T_long=T_long, output_path=outdir, obs_inds=[k for k in range(model.dim_x)], gpu=gpu)
-    logger.extra('FINAL Test plots took {} seconds'.format(round(default_timer() - t0_local, 2)))
+    for tl in [T_long, T_long*5]
+        outdir = os.path.join(plot_dir, 'final_Tlong{}'.format(tl))
+        t0_local = default_timer()
+        x0 = x_input[0].squeeze()
+        test_plots(x0=x0, logger=logger, sol_3d_true=x_input, sol_3d_true_kde=sol_3d_true_kde, rhs_nn=model.rhs, rhs_true=model.ode.full,  T_long=tl, output_path=outdir, obs_inds=[k for k in range(model.dim_x)], gpu=gpu)
+        logger.extra('FINAL Test plots took {} seconds for T_long = {}'.format(round(default_timer() - t0_local, 2), tl))
 
     return model
 
