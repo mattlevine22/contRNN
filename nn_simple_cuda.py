@@ -424,7 +424,7 @@ def train_model(model,
                 x0 = x_input[0].squeeze()
                 try:
                     with time_limit(evt):
-                        sol_3d_true_kde = test_plots(x0=x0, logger=logger, sol_3d_true=x_input, sol_3d_true_kde=sol_3d_true_kde, rhs_nn=model.rhs, rhs_true=model.ode.full,  T_long=Tl, output_path=outdir, obs_inds=[k for k in range(model.dim_x)])
+                        sol_3d_true_kde = test_plots(x0=x0, logger=logger, sol_3d_true=x_input, sol_3d_true_kde=sol_3d_true_kde, rhs_nn=model.rhs, rhs_true=model.ode.full,  T_long=Tl, output_path=outdir, obs_inds=[k for k in range(model.dim_x)], gpu=gpu)
                 except TimeoutException as e:
                     logger.info('Finished long-term model evaluation runs [TIMED OUT].')
                 logger.extra('Test plots took {} seconds'.format(round(default_timer() - t0_local, 2)))
@@ -433,7 +433,7 @@ def train_model(model,
     outdir = os.path.join(plot_dir, 'final')
     t0_local = default_timer()
     x0 = x_input[0].squeeze()
-    test_plots(x0=x0, logger=logger, sol_3d_true=x_input, sol_3d_true_kde=sol_3d_true_kde, rhs_nn=model.rhs, rhs_true=model.ode.full,  T_long=T_long, output_path=outdir, obs_inds=[k for k in range(model.dim_x)])
+    test_plots(x0=x0, logger=logger, sol_3d_true=x_input, sol_3d_true_kde=sol_3d_true_kde, rhs_nn=model.rhs, rhs_true=model.ode.full,  T_long=T_long, output_path=outdir, obs_inds=[k for k in range(model.dim_x)], gpu=gpu)
     logger.extra('FINAL Test plots took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
     return model
