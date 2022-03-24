@@ -109,9 +109,6 @@ y_output = ydot_train.T.float()
 # create new NN object
 model = Paper_NN(ode=ode, **FLAGS.__dict__)
 
-if FLAGS.gpu:
-    model = model.cuda()
-
 # try to load the pre-trained RNN
 try:
     if FLAGS.gpu:
@@ -123,6 +120,10 @@ try:
 except:
     pre_trained=False
     logger.info('First time training this model')
+
+
+if FLAGS.gpu:
+    model = model.cuda()
 
 n_train = X_train.shape[1]
 batch_size = FLAGS.batch_size
