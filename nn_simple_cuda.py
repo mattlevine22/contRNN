@@ -472,13 +472,13 @@ def test_plots(x0, logger, rhs_nn, nn_normalizer=None, sol_3d_true=None, sol_3d_
     # solve approximate 3D ODE at initial condition x0
     if nn_normalizer is None:
         if gpu:
-            sol_4d_nn = odeint(rhs_nn, y0=x0.reshape(-1).cuda(), t=torch.Tensor(t_eval).cuda()).squeeze(1)
+            sol_4d_nn = odeint(rhs_nn, y0=x0.reshape(-1).cuda(), t=torch.Tensor(t_eval).cuda()).squeeze(1).cpu()
         else:
             sol_4d_nn = odeint(rhs_nn, y0=x0.reshape(-1), t=torch.Tensor(t_eval)).squeeze(1)
 #             sol_4d_nn = torch.FloatTensor(my_solve_ivp( x0.reshape(-1), rhs_nn, t_eval, t_span, settings))
     else:
         if gpu:
-            sol_4d_nn = odeint(rhs_nn, y0=nn_normalizer.encode(x0).reshape(-1).cuda(), t=torch.Tensor(t_eval).cuda()).squeeze(1)
+            sol_4d_nn = odeint(rhs_nn, y0=nn_normalizer.encode(x0).reshape(-1).cuda(), t=torch.Tensor(t_eval).cuda()).squeeze(1).cpu()
         else:
             sol_4d_nn = odeint(rhs_nn, y0=nn_normalizer.encode(x0).reshape(-1), t=torch.Tensor(t_eval)).squeeze(1)
 
