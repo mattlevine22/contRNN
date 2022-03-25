@@ -110,17 +110,18 @@ y_output = ydot_train.T.float()
 model = Paper_NN(ode=ode, **FLAGS.__dict__)
 
 # try to load the pre-trained RNN
+if FLAGS.gpu:
+    device = 'cuda'
+else:
+    device = 'cpu'
+
 try:
-    if FLAGS.gpu:
-        model = torch.load(os.path.join(output_dir, 'rnn.pt'))
-    else:
-        model = torch.load(os.path.join(output_dir, 'rnn.pt'), map_location=torch.device('cpu'))
+    model = torch.load(os.path.join(output_dir, 'rnn.pt'), map_location=torch.device(device))
     logger.info('Loaded pre-trained model.')
     pre_trained=True
 except:
     pre_trained=False
     logger.info('First time training this model')
-
 
 if FLAGS.gpu:
     model = model.cuda()
