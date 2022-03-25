@@ -768,44 +768,45 @@ def train_model(model,
             test_loss_mse /= len(test_loader)
             test_loss_mse_history += [test_loss_mse]
 
-        # report summary stats
-        if ep%fast_plot_interval==0:
-            logger.info('Epoch {}, Train loss {}, Test loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, test_loss, round(default_timer() - t1, 2)))
-            torch.save(model, os.path.join(output_dir, 'rnn.pt'))
-            plot_logs(x={'Time':time_history}, name=os.path.join(summary_dir,'timer'), title='Cumulative Training Time (hrs)', xlabel='Epochs')
-            plot_logs(x={'Train':train_loss_history, 'Test':test_loss_history}, name=os.path.join(summary_dir,'loss_history'), title='Loss', xlabel='Epochs')
-            plot_logs(x=lr_history, name=os.path.join(summary_dir,'learning_rates'), title='Learning Rate Schedule', xlabel='Epochs')
-            gn_dict = {'Layer {}'.format(l): np.array(grad_norm_pre_clip_history)[:,l] for l in range(len(grad_norm_pre_clip))}
-            plot_logs(x=gn_dict, name=os.path.join(summary_dir,'grad_norm_pre_clip'), title='Gradient Norms (Pre-Clip)', xlabel='Epochs')
-            gn_dict = {'Layer {}'.format(l): np.array(grad_norm_post_clip_history)[:,l] for l in range(len(grad_norm_post_clip))}
-            plot_logs(x=gn_dict, name=os.path.join(summary_dir,'grad_norm_post_clip'), title='Gradient Norms (Post-Clip)', xlabel='Epochs')
+            # report summary stats
+            if ep%fast_plot_interval==0:
+                logger.info('Epoch {}, Train loss {}, Test loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, test_loss, round(default_timer() - t1, 2)))
+                torch.save(model, os.path.join(output_dir, 'rnn.pt'))
+                plot_logs(x={'Time':time_history}, name=os.path.join(summary_dir,'timer'), title='Cumulative Training Time (hrs)', xlabel='Epochs')
+                plot_logs(x={'Train':train_loss_history, 'Test':test_loss_history}, name=os.path.join(summary_dir,'loss_history'), title='Loss', xlabel='Epochs')
+                plot_logs(x=lr_history, name=os.path.join(summary_dir,'learning_rates'), title='Learning Rate Schedule', xlabel='Epochs')
+                gn_dict = {'Layer {}'.format(l): np.array(grad_norm_pre_clip_history)[:,l] for l in range(len(grad_norm_pre_clip))}
+                plot_logs(x=gn_dict, name=os.path.join(summary_dir,'grad_norm_pre_clip'), title='Gradient Norms (Pre-Clip)', xlabel='Epochs')
+                gn_dict = {'Layer {}'.format(l): np.array(grad_norm_post_clip_history)[:,l] for l in range(len(grad_norm_post_clip))}
+                plot_logs(x=gn_dict, name=os.path.join(summary_dir,'grad_norm_post_clip'), title='Gradient Norms (Post-Clip)', xlabel='Epochs')
 
 
-            if ep%(10*plot_interval)==0 and ep>0:
-                outdir = os.path.join(plot_dir, 'epoch{}'.format(ep))
-                Tl = T_long
-                evt = eval_time_limit
-            elif ep%plot_interval==0:
-                outdir = os.path.join(plot_dir, 'afast_plots/epoch{}'.format(ep))
-                Tl = T_long/100
-                evt = int(eval_time_limit/10)
+                if ep%(10*plot_interval)==0 and ep>0:
+                    outdir = os.path.join(plot_dir, 'epoch{}'.format(ep))
+                    Tl = T_long
+                    evt = eval_time_limit
+                elif ep%plot_interval==0:
+                    outdir = os.path.join(plot_dir, 'afast_plots/epoch{}'.format(ep))
+                    Tl = T_long/100
+                    evt = int(eval_time_limit/10)
 
-            t0_local = default_timer()
-            x0 = u_pred[-1,-1,:].cpu().data
-            try:
-                with time_limit(evt):
-                    sol_3d_true_kde = test_plots(x0=x0, rhs_nn=model, sol_3d_true_kde=sol_3d_true_kde, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=Tl, output_path=outdir, logger=logger, gpu=gpu, obs_inds=obs_inds)
-            except TimeoutException as e:
-                logger.info('Finished long-term model evaluation runs [TIMED OUT].')
-            logger.extra('Test plots took {} seconds'.format(round(default_timer() - t0_local, 2)))
+                t0_local = default_timer()
+                x0 = u_pred[-1,-1,:].cpu().data
+                try:
+                    with time_limit(evt):
+                        sol_3d_true_kde = test_plots(x0=x0, rhs_nn=model, sol_3d_true_kde=sol_3d_true_kde, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=Tl, output_path=outdir, logger=logger, gpu=gpu, obs_inds=obs_inds)
+                except TimeoutException as e:
+                    logger.info('Finished long-term model evaluation runs [TIMED OUT].')
+                logger.extra('Test plots took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
 
     # run final test plots
-    for Tl in [T_long, T_long*5, T_long*50]:
-        outdir = os.path.join(plot_dir, 'final_Tlong{}'.format(Tl))
-        t0_local = default_timer()
-        test_plots(x0=x0, rhs_nn=model, sol_3d_true_kde=sol_3d_true_kde, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=Tl, output_path=outdir, logger=logger, gpu=gpu, obs_inds=obs_inds)
-        logger.extra('FINAL Test plots took {} seconds for T_long = {}'.format(round(default_timer() - t0_local, 2), Tl))
+    with torch.no_grad():
+        for Tl in [T_long, T_long*5, T_long*50]:
+            outdir = os.path.join(plot_dir, 'final_Tlong{}'.format(Tl))
+            t0_local = default_timer()
+            test_plots(x0=x0, rhs_nn=model, sol_3d_true_kde=sol_3d_true_kde, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=Tl, output_path=outdir, logger=logger, gpu=gpu, obs_inds=obs_inds)
+            logger.extra('FINAL Test plots took {} seconds for T_long = {}'.format(round(default_timer() - t0_local, 2), Tl))
 
     return model
 
