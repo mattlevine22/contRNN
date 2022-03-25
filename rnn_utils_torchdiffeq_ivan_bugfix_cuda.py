@@ -837,11 +837,11 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, sol_3d_true_kde
     # solve approximate 3D ODE at initial condition x0
     y0 = x0.reshape(1,-1)
     t = torch.Tensor(t_eval)
-    if nn_normalizer is not None:
-        y0 = nn_normalizer.encode(y0)
     if gpu:
         y0 = y0.cuda()
         t = t.cuda()
+    if nn_normalizer is not None:
+        y0 = nn_normalizer.encode(y0)
     sol_4d_nn = odeint(rhs_nn, y0=y0, t=t).squeeze(1)
     if nn_normalizer is not None:
         sol_4d_nn = nn_normalizer.decode(sol_4d_nn)
