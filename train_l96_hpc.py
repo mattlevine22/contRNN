@@ -123,7 +123,7 @@ except:
     pre_trained=False
     logger.info('First time training this model')
 
-model.gpu = gpu
+model.gpu = FLAGS.gpu
 if FLAGS.gpu:
     model = model.cuda()
 
