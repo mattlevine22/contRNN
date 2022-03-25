@@ -128,6 +128,7 @@ class Paper_NN(torch.nn.Module):
                         dim_output=81,
                         dim_hidden=100,
                         activation='relu',
+                        gpu=False,
                         **kwargs):
                 super(Paper_NN, self).__init__()
 
@@ -137,6 +138,8 @@ class Paper_NN(torch.nn.Module):
                 self.f0 = ode.slow
                 self.dim_x = ode.K
                 self.dim_y = ode.K * ode.J
+
+                self.gpu = gpu
 
                 # assign parameter dimensions
                 self.n_layers = n_layers
@@ -220,7 +223,10 @@ class Paper_NN(torch.nn.Module):
                 '''Input and output in original coordinates'''
                 nn_inp = self.x_normalizer.encode(x)
                 foo = self.y_normalizer.decode(self.f_nn(nn_inp)).data.squeeze()
-                foo[:self.dim_x] += self.f0(x[:self.dim_x], t) # use f0
+                f0 = self.f0(x[:self.dim_x], t)
+                if self.gpu:
+                    f0 = f0.cuda()
+                foo[:self.dim_x] += f0 # use f0
                 return foo
 
 

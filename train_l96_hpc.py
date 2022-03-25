@@ -123,8 +123,10 @@ except:
     pre_trained=False
     logger.info('First time training this model')
 
+model.gpu = gpu
 if FLAGS.gpu:
     model = model.cuda()
+
 
 n_train = X_train.shape[1]
 batch_size = FLAGS.batch_size
