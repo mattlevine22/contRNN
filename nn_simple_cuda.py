@@ -251,6 +251,7 @@ def train_model(model,
                 weight_decay=0, #1e-4, or 1e-5?
                 min_lr=0,
                 patience=10,
+                factor_lr=0.5,
                 max_grad_norm=0,
                 shuffle=False,
                 plot_interval=1000,
@@ -325,7 +326,7 @@ def train_model(model,
     # optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=1.0, steps_per_epoch=len(train_loader), epochs=epochs, verbose=True)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, verbose=True, min_lr=min_lr, patience=patience)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=factor_lr, verbose=True, min_lr=min_lr, patience=patience)
 
     lr_history = {key: [] for key in range(len(optimizer.param_groups))}
     train_loss_history = []
@@ -436,7 +437,7 @@ def train_model(model,
                 logger.extra('Test plots took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
     # run final test plots
-    for tl in [T_long, T_long*5]:
+    for tl in [T_long, T_long*5, T_long*50]:
         outdir = os.path.join(plot_dir, 'final_Tlong{}'.format(tl))
         t0_local = default_timer()
         x0 = x_input[0].squeeze()
