@@ -13,7 +13,7 @@
 module load python3/3.7.0
 module load gcc/9.2.0
 
-round_dir="experiments/directL96_v1.1"
+round_dir="experiments/directL96_v1.2"
 echo "Sending results to $round_dir"
 srun --ntasks=1 python3 train_l96_hpc.py --patience 10 --factor 0.5 --T_long 500 --eval_time_limit 6000 --max_grad_norm 1 --plot_interval 100 --gpu 1 --lr 0.01 --epochs 3000 --do_normalization 1 --batch_size 1000 --hpc 1 --dim_hidden 1000 --n_layers 2 --activation gelu --output_dir "$round_dir/gelu1000_layers2_gpu_bs1000_gradclip1" &
 srun --ntasks=1 python3 train_l96_hpc.py --patience 10 --factor 0.5 --T_long 500 --eval_time_limit 6000 --max_grad_norm 1 --plot_interval 100 --gpu 1 --lr 0.01 --epochs 3000 --do_normalization 1 --batch_size 1000 --hpc 1 --dim_hidden 5000 --n_layers 2 --activation gelu --output_dir "$round_dir/gelu5000_layers2_gpu_bs1000_gradclip1" &
