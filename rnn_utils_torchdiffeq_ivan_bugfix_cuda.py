@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 from scipy.linalg import pinv
+from statsmodels.tsa.stattools import acf
 import torch
 from torch.utils.data import Dataset
 from odelibrary        import *
@@ -18,6 +19,7 @@ from timeit import default_timer
 import logging
 import signal
 from contextlib import contextmanager
+import pandas as pd
 from pdb import set_trace as bp
 
 plt.rcParams.update({'font.size': 22, 'legend.fontsize': 12,
@@ -514,6 +516,7 @@ def train_model(model,
                 weight_decay=0, #1e-4, or 1e-5?
                 min_lr=0,
                 patience=10,
+                factor_lr=0.5,
                 max_grad_norm=0,
                 shuffle=False,
                 plot_interval=1000,
@@ -529,6 +532,8 @@ def train_model(model,
     fast_plot_interval = max(1, int(plot_interval / 10))
     # batch_size now refers to the number of windows selected in an epoch
     # window refers to the size of a given window
+
+    sol_3d_true_kde = None
 
     # make output directory
     os.makedirs(output_dir, exist_ok=True)
@@ -591,7 +596,7 @@ def train_model(model,
     # optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=1.0, steps_per_epoch=len(train_loader), epochs=epochs, verbose=True)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, verbose=True, min_lr=min_lr, patience=patience)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=factor_lr, verbose=True, min_lr=min_lr, patience=patience)
 
     lr_history = {key: [] for key in range(len(optimizer.param_groups))}
     train_loss_history = []
@@ -644,17 +649,8 @@ def train_model(model,
                     end_point_loss = lambda_endpoints * myloss(yend, u_pred_BEST[-1, model.dim_x:, :].T).cpu().data.numpy()
                     loss_LB += end_point_loss
                     logger.info('Loss of True model (OVERFITTING LB): {}'.format(loss_LB))
-            # run forward model
-            # u_pred = odeint(model, y0=u0, t=times[0])
 
-            # run warmup
-            # for j in range(warmup):
-            #     if learn_inits_only:
-            #         u0 = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=torch.Tensor([0, dt]))).permute(0,2,1)[-1]
-            #     else:
-            #         u0 = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=torch.Tensor([0, dt])))[-1]
-            #     if j < (warmup-1) or noisy_start:
-            #         u0 = torch.hstack( (x_noisy[:,j+1,:], u0[:,model.dim_x:]) )
+            # run forward model
             t0_local = default_timer()
             if backprop_warmup:
                 u0, upd_mean_vec = model.warmup(data=x_noisy[:,1:(warmup+1),:], u0=u0, dt=dt)
@@ -772,47 +768,6 @@ def train_model(model,
             test_loss_mse /= len(test_loader)
             test_loss_mse_history += [test_loss_mse]
 
-            # now run long-term model eval-stuff
-            u0 = u_pred[-1,-1,:].cpu().data
-            if ep%plot_interval==0 and ep>0 and not learn_inits_only:
-                try:
-                    with time_limit(eval_time_limit):
-                        logger.info('Starting long-term model evaluation runs')
-                        logger.info('solving for IC = {}'.format(u0))
-                        t_eval = dt*np.arange(0, 5000)
-                        # t_span = [t_eval[0], t_eval[-1]]
-                        settings= {'method': 'RK45'}
-                        try:
-                            if gpu:
-                                sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0.cuda()).reshape(1,-1), t=torch.Tensor(t_eval).cuda())).cpu().data.numpy().squeeze()
-                            else:
-                                sol = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0).reshape(1,-1), t=torch.Tensor(t_eval))).cpu().data.numpy().squeeze()
-                        except:
-                            logger.info('Solver failed')
-                            continue
-
-                        # sol = my_solve_ivp( u0.numpy().reshape(-1), lambda t, y: model.rhs_numpy(y,t), t_eval, t_span, settings)
-                        fig, axs = plt.subplots(constrained_layout=True, nrows=1, figsize=(20, 10))
-                        axs.plot(t_eval[:len(sol)], sol)
-                        axs.set_xlabel('Time')
-                        plt.savefig(os.path.join(plot_dir,'ContinueTraining_Short_Epoch{}.pdf'.format(ep)), format='pdf')
-                        plt.close()
-
-                        f_path = os.path.join(plot_dir,'ContinueTraining_Epoch{}'.format(ep))
-                        try:
-                            if gpu:
-                                test_plots(x0=u0.reshape(1,-1).cuda(), rhs_nn=model, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu, obs_inds=obs_inds)
-                            else:
-                                test_plots(x0=u0.reshape(1,-1), rhs_nn=model.rhs_numpy, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=T_long, output_path=f_path, logger=logger, gpu=gpu, obs_inds=obs_inds)
-                        except Exception:
-                            logger.info('Test Plots failed.')
-                            logger.exception(Exception)
-                            logger.info('u0.shape={}'.format(u0.shape))
-                            logger.info('sol_3d_true.shape={}'.format(X_long.shape))
-                        logger.info('Finished long-term model evaluation runs without interruption.')
-                except TimeoutException as e:
-                    logger.info('Finished long-term model evaluation runs [TIMED OUT].')
-
         # report summary stats
         if ep%fast_plot_interval==0:
             logger.info('Epoch {}, Train loss {}, Test loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, test_loss, round(default_timer() - t1, 2)))
@@ -825,10 +780,37 @@ def train_model(model,
             gn_dict = {'Layer {}'.format(l): np.array(grad_norm_post_clip_history)[:,l] for l in range(len(grad_norm_post_clip))}
             plot_logs(x=gn_dict, name=os.path.join(summary_dir,'grad_norm_post_clip'), title='Gradient Norms (Post-Clip)', xlabel='Epochs')
 
+
+            if ep%(10*plot_interval)==0 and ep>0:
+                outdir = os.path.join(plot_dir, 'epoch{}'.format(ep))
+                Tl = T_long
+                evt = eval_time_limit
+            elif ep%plot_interval==0:
+                outdir = os.path.join(plot_dir, 'afast_plots/epoch{}'.format(ep))
+                Tl = T_long/100
+                evt = int(eval_time_limit/10)
+
+            t0_local = default_timer()
+            x0 = u_pred[-1,-1,:].cpu().data
+            try:
+                with time_limit(evt):
+                    sol_3d_true_kde = test_plots(x0=x0, rhs_nn=model, sol_3d_true_kde=sol_3d_true_kde, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=Tl, output_path=outdir, logger=logger, gpu=gpu, obs_inds=obs_inds)
+            except TimeoutException as e:
+                logger.info('Finished long-term model evaluation runs [TIMED OUT].')
+            logger.extra('Test plots took {} seconds'.format(round(default_timer() - t0_local, 2)))
+
+
+    # run final test plots
+    for Tl in [T_long, T_long*5, T_long*50]:
+        outdir = os.path.join(plot_dir, 'final_Tlong{}'.format(Tl))
+        t0_local = default_timer()
+        test_plots(x0=x0, rhs_nn=model, sol_3d_true_kde=sol_3d_true_kde, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=Tl, output_path=outdir, logger=logger, gpu=gpu, obs_inds=obs_inds)
+        logger.extra('FINAL Test plots took {} seconds for T_long = {}'.format(round(default_timer() - t0_local, 2), Tl))
+
     return model
 
 
-def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, T_long=5e3, output_path='outputs', logger=None, gpu=False, obs_inds=[0]):
+def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, sol_3d_true_kde=None, rhs_true=None, T_long=5e3, output_path='outputs', logger=None, gpu=False, obs_inds=[0], Tacf=10, kde_subsample=500000):
 
     # rhs_nn(t, y)
     # rhs_true(t,y)
@@ -846,25 +828,29 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
     ## Generate solutions ##
     # solve true 3D ODE at initial condition x0
     if sol_3d_true is None:
+        t0_local = default_timer()
         sol_3d_true = my_solve_ivp( x0.reshape(-1), rhs_true, t_eval, t_span, settings)
+        logger.extra('Solving True-system for T_long={} took {} seconds'.format(T_long, round(default_timer() - t0_local, 2)))
 
+    t0_local = default_timer()
     K = sol_3d_true.shape[1]
     # solve approximate 3D ODE at initial condition x0
-    if nn_normalizer is None:
-        if gpu:
-            sol_4d_nn = odeint(rhs_nn, y0=x0.reshape(1,-1).cuda(), t=torch.Tensor(t_eval).cuda()).squeeze(1)
-        else:
-            sol_4d_nn = torch.FloatTensor(my_solve_ivp( x0.reshape(-1), rhs_nn, t_eval, t_span, settings))
-    else:
-        if gpu:
-            sol_4d_nn = odeint(rhs_nn, y0=nn_normalizer.encode(x0).reshape(1,-1).cuda(), t=torch.Tensor(t_eval).cuda()).squeeze(1)
-        else:
-            sol_4d_nn = torch.FloatTensor(my_solve_ivp( nn_normalizer.encode(x0).reshape(-1), rhs_nn, t_eval, t_span, settings))
-        sol_4d_nn = nn_normalizer.decode(sol_4d_nn).cpu().data.numpy()
+    y0 = x0.reshape(1,-1)
+    t = torch.Tensor(t_eval)
+    if nn_normalizer is not None:
+        y0 = nn_normalizer.encode(y0)
+    if gpu:
+        y0 = y0.cuda()
+        t = t.cuda()
+    sol_4d_nn = odeint(rhs_nn, y0=y0, t=t).squeeze(1)
+    if nn_normalizer is not None:
+        sol_4d_nn = nn_normalizer.decode(sol_4d_nn)
+    sol_4d_nn = sol_4d_nn.cpu().data.numpy()
+    logger.extra('Solving NN-system for T_long={} took {} seconds'.format(T_long, round(default_timer() - t0_local, 2)))
+
 
     nn_max = len(sol_4d_nn)
     true_max = len(sol_3d_true)
-
     len_dict = {'short': min(nn_max, int(10/dt)),
                     'medium': min(nn_max, int(250/dt)),
                     'long': nn_max}
@@ -882,12 +868,28 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
         plt.savefig(os.path.join(output_path, 'trajectory_{}.pdf'.format(key)), format='pdf')
         plt.close()
 
+        fig, axs = plt.subplots(constrained_layout=True, nrows=1, figsize=(15, 15), sharex=True)
+        axs.plot(t_eval[:n],sol_4d_nn[:n,K:], marker='x')
+        axs.plot(t_eval[:n],sol_4d_nn[:n,obs_inds])
+        black_line = matplotlib.lines.Line2D([], [], color='black', label='Observed States')
+        black_x = matplotlib.lines.Line2D([], [], color='black', marker='x', markersize=15, label='Latent States')
+        axs.legend(handles=[black_x, black_line])
+        plt.title('All learnt dynamics')
+        axs.set_xlabel('Time')
+        plt.savefig(os.path.join(output_path, 'trajectoryAll_{}.pdf'.format(key)), format='pdf')
+        plt.close()
+
     ## Plot combined invariant measure of all states
     ## Plot invariant measure of trajectories for full available time-window
+    t0_local = default_timer()
     n = len(sol_3d_true) #int(1000/dt)
     n_burnin = int(0.1*n)
     fig, axs = plt.subplots(figsize=(20, 10))
-    sns.kdeplot(sol_3d_true[n_burnin:,obs_inds].reshape(-1), label='True system')
+    if sol_3d_true_kde is None:
+        logger.info('Generating true KDE---should only occur the first time plots are made.')
+        sol_3d_true_kde = sns.kdeplot(np.random.choice(sol_3d_true[n_burnin:,obs_inds].reshape(-1), size=kde_subsample), label='True system').get_lines()[0].get_data()
+    else:
+        axs.plot(sol_3d_true_kde[0], sol_3d_true_kde[1], label='True system')
 #     sns.kdeplot(sol_4d_true[:n,0], label='L63 - 4D')
     n_burnin = int(0.1*nn_max)
     sns.kdeplot(sol_4d_nn[n_burnin:,obs_inds].reshape(-1), label='NN system')
@@ -899,22 +901,61 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, rhs_true=None, 
     ## Plot invariant measure of trajectories for specific time-window (e.g. pre-collapse)
     n = min(nn_max, int(100/dt))
     fig, axs = plt.subplots(figsize=(20, 10))
-    sns.kdeplot(sol_3d_true[:n,obs_inds].reshape(-1), label='True system')
+    axs.plot(sol_3d_true_kde[0], sol_3d_true_kde[1], label='True system')
 #     sns.kdeplot(sol_4d_true[:n,0], label='L63 - 4D')
     sns.kdeplot(sol_4d_nn[:n,obs_inds].reshape(-1), label='NN system')
     plt.title('First coordinate KDE (pre-collapse, if any.)')
     plt.legend()
     plt.savefig(os.path.join(output_path, 'inv_stateAll_preCollapse.pdf'.format(k)), format='pdf')
     plt.close()
+    logger.extra('Plotting invariant measures took {} seconds'.format(round(default_timer() - t0_local, 2)))
+
+    ## Plot Autocorrelation Function
+    t0_local = default_timer()
+    n_burnin_approx = int(0.1*len(sol_4d_nn))
+    n_burnin_true = int(0.1*len(sol_3d_true))
+    Tacf = min(Tacf, dt*(len(sol_4d_nn) - n_burnin_approx)/2, dt*(len(sol_3d_true) - n_burnin_true)/2)
+    nlags = int(Tacf/dt) - 1
+    lag_vec = dt*np.arange(0,nlags+1)
+
+    acf_error_all = []
+    df = pd.DataFrame()
+    for k in obs_inds:
+        acf_approx = acf(sol_4d_nn[n_burnin_approx:,k], fft=True, nlags=nlags) #look at first component
+        acf_true = acf(sol_3d_true[n_burnin_true:,k], fft=True, nlags=nlags) #look at first component
+        acf_error = np.mean((acf_true - acf_approx)**2)
+        acf_error_all.append(acf_error)
+
+        df_approx = pd.DataFrame({'Time Lag': lag_vec, 'ACF': acf_approx, 'Type': 'NN system', 'State': k})
+        df_true = pd.DataFrame({'Time Lag': lag_vec, 'ACF': acf_true, 'Type': 'True system', 'State': k})
+        df = pd.concat([df, df_approx, df_true], ignore_index=True)
+
+        fig, axs = plt.subplots(figsize=(20, 10))
+        axs.plot(lag_vec, acf_true, label='True system')
+        axs.plot(lag_vec, acf_approx, label='NN system')
+        axs.set_xlabel('Time Lag')
+        plt.title('Autocorrelation Functions (component {})'.format(k))
+        plt.legend()
+        plt.savefig(os.path.join(output_path, 'acf_{}.pdf'.format(k)), format='pdf')
+        plt.close()
+
+    acf_error_all = np.array(acf_error_all)
+
+    fig, axs = plt.subplots(figsize=(20, 10))
+    sns.lineplot(data=df, x='Time Lag', y='ACF', hue='Type', ci='sd', hue_order=['True system', 'NN system'])
+    plt.legend()
+    plt.savefig(os.path.join(output_path, 'acf_combined.pdf'), format='pdf')
+    plt.close()
+    logger.info('ACF MSE = {} +/- {} (T_long = {}) [took {} sec]'.format(np.mean(acf_error_all), np.std(acf_error_all), T_long, round(default_timer() - t0_local, 2)))
 
     ## compute mean of last 10 Times of long timeseries
-    n = min(nn_max, int(10 / dt))
-    logger.info('Mean of approx final T=100 {}'.format(np.mean(sol_4d_nn[-n:,:], axis=0)))
+    # n = min(nn_max, int(10 / dt))
+    # logger.info('Mean of approx final T=100 {}'.format(np.mean(sol_4d_nn[-n:,:], axis=0)))
+    #
+    # n = min(true_max, int(10 / dt))
+    # logger.info('Mean of true final T=100 {}'.format(np.mean(sol_3d_true[-n:,:], axis=0)))
 
-    n = min(true_max, int(10 / dt))
-    logger.info('Mean of true final T=100 {}'.format(np.mean(sol_3d_true[-n:,:], axis=0)))
+    # logger.info('X_approx(T_end) {}'.format(sol_4d_nn[-1:,:]))
+    # logger.info('X_true(T_end) {}'.format(sol_3d_true[-1:,:]))
 
-    logger.info('X_approx(T_end) {}'.format(sol_4d_nn[-1:,:]))
-    logger.info('X_true(T_end) {}'.format(sol_3d_true[-1:,:]))
-
-    return
+    return sol_3d_true_kde

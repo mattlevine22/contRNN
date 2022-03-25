@@ -91,7 +91,6 @@ if FLAGS.ds_name=='L63':
     X_train = np.load(train_path)
     X_long  = np.load(long_path)
 else:
-    FLAGS.T_long = 5e2
     long_path = os.path.join(local_path,'data/X_train_{}_longer.npy').format(FLAGS.ds_name)
     X_long  = np.load(long_path)
     X_long = X_long[:9,:-200000]
