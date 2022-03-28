@@ -20,9 +20,11 @@ import logging
 
 import argparse
 parser = argparse.ArgumentParser()
+parser.add_argument('--barrier', default=0, type=float)
+parser.add_argument('--alpha_barrier', default=100, type=float)
 parser.add_argument('--adjoint', default=0, type=int)
 parser.add_argument('--ds_name', default="L63", type=str)
-parser.add_argument('--T_long', default=5e3, type=float)
+parser.add_argument('--T_long', default=5e2, type=float)
 parser.add_argument('--eval_time_limit', default=600, type=int) # (seconds) limit time of test solutions (abort if taking too long and continue training)
 parser.add_argument('--backprop_warmup', default=1, type=int)
 parser.add_argument('--warmup_type', default='forcing', type=str)
@@ -112,22 +114,7 @@ logger.info('Train shape: {}'.format(X_train.shape))
 logger.info('Test shape: {}'.format(X_long.shape))
 
 # create new RNN object
-my_rnn = Paper_NN(
-                    logger=logger,
-                    adjoint=FLAGS.adjoint,
-                    ds_name=FLAGS.ds_name,
-                    gpu=FLAGS.gpu,
-                    warmup_type=FLAGS.warmup_type,
-                    use_f0=FLAGS.use_f0,
-                    infer_normalizers=False,
-                    infer_ic=FLAGS.infer_ic,
-                    n_layers=FLAGS.n_layers,
-                    use_bilinear=FLAGS.use_bilinear,
-                    dim_x=FLAGS.dim_x,
-                    dim_y=FLAGS.dim_y,
-                    dim_hidden=FLAGS.dim_hidden,
-                    activation=FLAGS.activation)
-
+my_rnn = Paper_NN(logger=logger, **FLAGS.__dict__)
 if FLAGS.gpu:
     my_rnn = my_rnn.cuda()
 

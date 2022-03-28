@@ -187,6 +187,8 @@ def get_bs(x, batch_size, window):
 
 class Paper_NN(torch.nn.Module):
             def __init__(self,
+                        barrier=0,
+                        alpha_barrier=100, # for the barrier
                         adjoint=False,
                         ds_name='L63',
                         warmup_type='forcing',
@@ -200,7 +202,8 @@ class Paper_NN(torch.nn.Module):
                         infer_normalizers=False,
                         infer_ic=True,
                         gpu=False,
-                        activation='relu'):
+                        activation='relu',
+                        **kwargs):
                 super(Paper_NN, self).__init__()
 
                 if logger is None:
@@ -210,6 +213,11 @@ class Paper_NN(torch.nn.Module):
                 self.logger = logger
 
                 self.adjoint = adjoint
+
+                # define barrier parameters
+                self.barrier = barrier
+                self.alpha1 = alpha_barrier
+                self.alpha2 = alpha_barrier
 
                 # assign parameter dimensions
                 self.n_layers = n_layers
@@ -242,6 +250,8 @@ class Paper_NN(torch.nn.Module):
                     self.output_sd              = torch.nn.Parameter(torch.nn.init.normal_(torch.empty(self.dim_input), mean=0.0, std=100))
 
                 self.print_n_params()
+
+                self.sigmoid = torch.nn.Sigmoid()
 
             def set_H(self):
                 H = torch.zeros(self.dim_x, self.dim_output)#, batch_size, N_particles)
@@ -325,12 +335,19 @@ class Paper_NN(torch.nn.Module):
                 if self.infer_normalizers:
                     inp = self.encode(inp)
 
+                r = inp[:,self.dim_x:]
+
                 for l in range(self.n_layers):
                     inp = self.activations[l](inp)
                     if self.use_bilinear:
                         inp = self.linears[l](inp) + self.bilinears[l](inp,inp) # easy way to cope with large initialzations of bilinear cells
                     else:
                         inp = self.linears[l](inp)
+
+                if self.barrier > 0:
+                    g_hat = self.sigmoid(inp[:,self.dim_x:])  # set hidden dynamics to [0,1]
+                    g_eff = g_hat * ( self.alpha1*(self.barrier - r) + self.alpha2*(self.barrier + r) ) - self.alpha2*(self.barrier + r)
+                    inp[:,self.dim_x:] =  g_eff
 
                 if self.infer_normalizers:
                     inp = self.decode(inp)
