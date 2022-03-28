@@ -37,6 +37,8 @@ parser.add_argument('--do_normalization', default=0, type=int)
 parser.add_argument('--lr', default=1e-1, type=float)
 parser.add_argument('--min_lr', default=0, type=float)
 parser.add_argument('--patience', default=10, type=int)
+parser.add_argument('--step_size', default=10, type=int) # for stepLR
+parser.add_argument('--gamma', default=1, type=float) # for stepLR 
 parser.add_argument('--max_grad_norm', default=0, type=float)
 parser.add_argument('--shuffle', default=0, type=int)
 parser.add_argument('--multi_traj', default=0, type=int)

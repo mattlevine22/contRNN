@@ -517,6 +517,8 @@ def train_model(model,
                 min_lr=0,
                 patience=10,
                 factor_lr=0.5,
+                step_size=10, # step_size for stepLR
+                gamma=1, # default is to not use StepLR
                 max_grad_norm=0,
                 shuffle=False,
                 plot_interval=1000,
@@ -594,9 +596,9 @@ def train_model(model,
     optimizer = torch.optim.Adam(opt_param_list, lr=lr, weight_decay=weight_decay)
 
     # optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
+    scheduler_step = torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=1.0, steps_per_epoch=len(train_loader), epochs=epochs, verbose=True)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=factor_lr, verbose=True, min_lr=min_lr, patience=patience)
+    scheduler_plateau = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=factor_lr, verbose=True, min_lr=min_lr, patience=patience)
 
     lr_history = {key: [] for key in range(len(optimizer.param_groups))}
     train_loss_history = []
@@ -719,7 +721,8 @@ def train_model(model,
         grad_norm_post_clip /= len(train_loader)
         grad_norm_post_clip_history += [grad_norm_post_clip]
 
-        scheduler.step(train_loss)
+        scheduler_plateau.step(train_loss)
+        scheduler_step.step()
 
         # validate by running off-data and predicting ahead
         model.eval()
