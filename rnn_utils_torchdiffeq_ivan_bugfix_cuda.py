@@ -200,6 +200,7 @@ class Paper_NN(torch.nn.Module):
                         dim_y=2,
                         dim_hidden=100,
                         infer_normalizers=False,
+                        infer_K=False,
                         infer_ic=True,
                         gpu=False,
                         activation='relu',
@@ -232,6 +233,7 @@ class Paper_NN(torch.nn.Module):
                 self.infer_normalizers = infer_normalizers
                 self.infer_ic = bool(infer_ic)
                 self.gpu = gpu
+                self.infer_K = infer_K
                 self.set_warmup(warmup_type) # define the warmup scheme
 
                 # create model parameters and functions
@@ -260,6 +262,11 @@ class Paper_NN(torch.nn.Module):
                 self.H = H
                 if self.gpu:
                     self.H = self.H.cuda()
+
+            def set_K(self, eta=0.5):
+                self.K = torch.nn.Parameter(eta * self.H.T, requires_grad=bool(self.infer_K))
+                if self.gpu:
+                    self.K = self.K.cuda()
 
             def set_Gamma(self, obs_noise_sd=1):
                 self.Gamma = obs_noise_sd * torch.eye(self.dim_x)
@@ -413,13 +420,13 @@ class Paper_NN(torch.nn.Module):
                                 'enkf': self.warmup_EnKF}
                 self.warmup = warmup_dict[warmup_type.lower()]
                 self.set_H() # define the H observation matrix for DA
+                self.set_K() # define the H observation matrix for DA
                 self.set_Gamma(obs_noise_sd=1)
 
             def warmup_3dVar(self, data, u0, dt, eta=0.5):
                 # u0 = uses data[:,0,:]
                 # data = data[:,1:warmup,:]
                 # in the jth round, we will predict the jth measurement, then update wrt it.
-                K = eta * self.H.T
                 tstep = torch.Tensor([0, dt])
                 if self.gpu:
                     tstep = tstep.cuda()
@@ -430,7 +437,7 @@ class Paper_NN(torch.nn.Module):
                     # predict
                     u0_pred = self.x_normalizer.decode(myodeint(self, y0=self.x_normalizer.encode(u0_upd), t=tstep, adjoint=self.adjoint)[-1])
                     # update
-                    u0_upd = u0_pred + (K @ (data[:,j,:].T - self.H @ u0_pred.T)).T
+                    u0_upd = u0_pred + (self.K @ (data[:,j,:].T - self.H @ u0_pred.T)).T
                     # u0_good = torch.hstack( (data[:,j,:], u0_pred[:,self.dim_x:]) )
                     # save updates
                     upd_mean_vec.append(u0_upd.cpu().detach().data.numpy())

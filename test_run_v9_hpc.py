@@ -20,6 +20,7 @@ import logging
 
 import argparse
 parser = argparse.ArgumentParser()
+parser.add_argument('--infer_K', default=0, type=int)
 parser.add_argument('--barrier', default=0, type=float)
 parser.add_argument('--alpha_barrier', default=100, type=float)
 parser.add_argument('--adjoint', default=0, type=int)
