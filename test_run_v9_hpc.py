@@ -21,6 +21,8 @@ import logging
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--infer_K', default=0, type=int)
+parser.add_argument('--integrator', default='dopri5', type=str)
+parser.add_argument('--integrator_step_size', default=0.01, type=float) #inactive w/ dopri5
 parser.add_argument('--barrier', default=0, type=float)
 parser.add_argument('--alpha_barrier', default=100, type=float)
 parser.add_argument('--adjoint', default=0, type=int)

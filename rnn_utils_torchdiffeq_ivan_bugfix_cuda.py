@@ -49,11 +49,11 @@ def time_limit(seconds):
 #     print("Timed out!")
 
 
-def myodeint(func, y0, t, adjoint=False):
+def myodeint(func, y0, t, adjoint=False, method='dopri5', options={}):
     if adjoint:
-        return odeint_adjoint(func, y0, t)
+        return odeint_adjoint(func, y0, t, method=method, options=options)
     else:
-        return odeint(func, y0, t)
+        return odeint(func, y0, t, method=method, options=options)
 
 class TimeseriesDataset(Dataset):
     def __init__(self, x, times, window, warmup, target_cols, known_inits, obs_noise_sd, short_run=False):
@@ -435,7 +435,7 @@ class Paper_NN(torch.nn.Module):
                 upd_mean_vec = [u0_upd.cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
                     # predict
-                    u0_pred = self.x_normalizer.decode(myodeint(self, y0=self.x_normalizer.encode(u0_upd), t=tstep, adjoint=self.adjoint)[-1])
+                    u0_pred = self.x_normalizer.decode(myodeint(self, y0=self.x_normalizer.encode(u0_upd), t=tstep, adjoint=self.adjoint, method=self.integrator, options=self.integrator_options)[-1])
                     # update
                     u0_upd = u0_pred + (self.K @ (data[:,j,:].T - self.H @ u0_pred.T)).T
                     # u0_good = torch.hstack( (data[:,j,:], u0_pred[:,self.dim_x:]) )
@@ -455,7 +455,7 @@ class Paper_NN(torch.nn.Module):
                 upd_mean_vec = [u0.cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
                     # predict
-                    u0 = self.x_normalizer.decode(myodeint(self, y0=self.x_normalizer.encode(u0), t=tstep, adjoint=self.adjoint)[-1])
+                    u0 = self.x_normalizer.decode(myodeint(self, y0=self.x_normalizer.encode(u0), t=tstep, adjoint=self.adjoint, method=self.integrator, options=self.integrator_options)[-1])
                     # update
                     u0 = torch.hstack( (data[:,j,:], u0[:,self.dim_x:]) )
                     # save updates
@@ -485,7 +485,7 @@ class Paper_NN(torch.nn.Module):
                 upd_mean_vec = [torch.mean(u0_ensemble_upd, axis=1).cpu().detach().data.numpy()]
                 for j in range(data.shape[1]):
                     # predict ensemble
-                    u0_ensemble_pred = self.x_normalizer.decode(myodeint(self, y0=self.x_normalizer.encode(u0_ensemble_upd), t=tstep, adjoint=self.adjoint)[-1])
+                    u0_ensemble_pred = self.x_normalizer.decode(myodeint(self, y0=self.x_normalizer.encode(u0_ensemble_upd), t=tstep, adjoint=self.adjoint, method=self.integrator, options=self.integrator_options)[-1])
 
                     # compute predicted covariance
                     mean = torch.mean(u0_ensemble_pred, dim=1).unsqueeze(1)
@@ -516,6 +516,8 @@ class Paper_NN(torch.nn.Module):
 def train_model(model,
                 x_train,
                 X_long,
+                integrator_step_size=0.01,
+                integrator='dopri5',
                 adjoint=False,
                 backprop_warmup=True,
                 short_run=False,
@@ -589,6 +591,10 @@ def train_model(model,
         x_normalizer.cuda()
     model.x_normalizer = x_normalizer
 
+    model.integrator = integrator
+    model.integrator_options = {}
+    if integrator is not 'dopri5':
+        model.integrator_options['step_size'] = integrator_step_size
 
     # get datasets
     ntrain = x_train.shape[0]
@@ -687,9 +693,9 @@ def train_model(model,
 
             t0_local = default_timer()
             if learn_inits_only:
-                u_pred = x_normalizer.decode(myodeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0], adjoint=adjoint).permute(0,2,1))
+                u_pred = x_normalizer.decode(myodeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0], adjoint=adjoint, method=model.integrator, options=model.integrator_options).permute(0,2,1))
             else:
-                u_pred = x_normalizer.decode(myodeint(model, y0=x_normalizer.encode(u0), t=times[0], adjoint=adjoint))
+                u_pred = x_normalizer.decode(myodeint(model, y0=x_normalizer.encode(u0), t=times[0], adjoint=adjoint, method=model.integrator, options=model.integrator_options))
             logger.extra('Training prediction took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
             # compute losses
