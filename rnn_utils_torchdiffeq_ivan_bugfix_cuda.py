@@ -835,7 +835,7 @@ def train_model(model,
 
     # run final test plots
     with torch.no_grad():
-        for Tl in [5, 50, T_long, T_long*5, T_long*50]:
+        for Tl in [5, 50, T_long, T_long*2, T_long*5, T_long*50]:
             outdir = os.path.join(plot_dir, 'final_Tlong{}'.format(Tl))
             t0_local = default_timer()
             sol_3d_true_kde = test_plots(x0=x0, rhs_nn=model, sol_3d_true_kde=sol_3d_true_kde, nn_normalizer=x_normalizer, sol_3d_true=X_long, T_long=Tl, output_path=outdir, logger=logger, gpu=gpu, obs_inds=obs_inds)
