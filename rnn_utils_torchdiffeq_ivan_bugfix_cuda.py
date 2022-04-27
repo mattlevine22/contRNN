@@ -53,7 +53,7 @@ def time_limit(seconds):
 def validity_time(target, prediction, thresh_list=[0.05, 0.4], dt=0.01, thresh_norm=63):
     n_traj = target.shape[0]
     t_valid = np.zeros(n_traj)
-    eval_list = [computeTestErrors(target[j].numpy(), prediction[j].numpy(), dt=dt, thresh_list=thresh_list, thresh_norm=thresh_norm) for j in range(n_traj)]
+    eval_list = [computeTestErrors(target[j].cpu().numpy(), prediction[j].cpu().numpy(), dt=dt, thresh_list=thresh_list, thresh_norm=thresh_norm) for j in range(n_traj)]
     t_valid = {}
     for t in thresh_list:
         t_valid[t] = [foo['t_valid_{}'.format(t)] for foo in eval_list]
