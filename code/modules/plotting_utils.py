@@ -5,6 +5,7 @@ from scipy.linalg import svdvals, eigvals
 from scipy.sparse.linalg import svds as sparse_svds
 from scipy.sparse.linalg import eigs as sparse_eigs
 import itertools
+import pandas as pd
 
 # Plotting parameters
 import matplotlib
@@ -39,8 +40,8 @@ def train_plot(t_all, t, x, x_noisy, u_pred, u_upd, warmup, output_path):
     axs[0].legend()
 
     if K > K_obs:
-        axs[-1].plot(t, u_pred[:,K_obs:], label='NN-Predicted Latent State')
-        axs[-1].plot(t_all[:(warmup+1)], u_upd[:,K_obs:], label='NN-Assimilated Latent State', marker='x')
+        axs[-1].plot(t, u_pred[:,K_obs:], label='NN-Predicted Latent State', color='gray')
+        axs[-1].plot(t_all[:(warmup+1)], u_upd[:,K_obs:], label='NN-Assimilated Latent State', marker='x', color='gray')
         black_x = matplotlib.lines.Line2D([], [], color='black', marker='x', markersize=15, label='NN-Assimilated Latent State')
         black_line = matplotlib.lines.Line2D([], [], color='black', label='NN-Predicted Latent State')
         axs[-1].legend(handles=[black_x, black_line])
@@ -61,6 +62,14 @@ def plot_logs(x, name, title, xlabel):
     plt.savefig(name+'_xlog_ylog.pdf', format='pdf')
     ax.set_xscale('linear')
     plt.savefig(name+'_ylog.pdf', format='pdf')
+    plt.close()
+
+def plot_t_valid(x, name, title, xlabel):
+    fig, ax = plt.subplots(nrows=1, figsize=(20, 10))
+    sns.lineplot(data=x, x='variable', y='value')
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    plt.savefig(name)
     plt.close()
 
 def find_collapse(X, times=None, window=5000, true_mean=-0.07, true_sd=7.92):

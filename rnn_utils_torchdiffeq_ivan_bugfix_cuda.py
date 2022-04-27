@@ -13,7 +13,8 @@ import torch
 from torch.utils.data import Dataset
 from odelibrary        import *
 from torchdiffeq import odeint_adjoint, odeint
-from plotting_utils import plot_logs, train_plot
+from plotting_utils import plot_logs, train_plot, plot_t_valid
+from computation_utils import computeTestErrors
 from dynamical_models import L63_torch
 from timeit import default_timer
 import logging
@@ -48,6 +49,15 @@ def time_limit(seconds):
 # except TimeoutException as e:
 #     print("Timed out!")
 
+
+def validity_time(target, prediction, thresh_list=[0.05, 0.4], dt=0.01, thresh_norm=63):
+    n_traj = target.shape[0]
+    t_valid = np.zeros(n_traj)
+    eval_list = [computeTestErrors(target[j].numpy(), prediction[j].numpy(), dt=dt, thresh_list=thresh_list, thresh_norm=thresh_norm) for j in range(n_traj)]
+    t_valid = {}
+    for t in thresh_list:
+        t_valid[t] = [foo['t_valid_{}'.format(t)] for foo in eval_list]
+    return t_valid
 
 def myodeint(func, y0, t, adjoint=False, method='dopri5', options={}):
     if adjoint:
@@ -593,7 +603,7 @@ def train_model(model,
 
     model.integrator = integrator
     model.integrator_options = {}
-    if integrator is not 'dopri5':
+    if integrator != 'dopri5':
         model.integrator_options['step_size'] = integrator_step_size
 
     # get datasets
@@ -604,12 +614,19 @@ def train_model(model,
     test_size = len(full_dataset) - train_size
     train_set, test_set = torch.utils.data.random_split(full_dataset, [train_size, test_size])
 
+
     bs_train = min(len(train_set), batch_size)
     bs_test = min(len(test_set), batch_size)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs_train, shuffle=shuffle, drop_last=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=bs_test, shuffle=False, drop_last=True)
-    logger.info('Effective batch_size: Training = {}, Testing = {}'.format(bs_train, bs_test))
-    logger.info('Number of batches per epoch: Training = {}, Testing = {}'.format(len(train_loader), len(test_loader)))
+    # logger.info('Effective batch_size: Training = {}, Testing = {}'.format(bs_train, bs_test))
+    # logger.info('Number of batches per epoch: Training = {}, Testing = {}'.format(len(train_loader), len(test_loader)))
+
+    val_set = TimeseriesDataset(x_train, train_times, int(10/dt), warmup, obs_inds, known_inits, obs_noise_sd, short_run)
+    bs_val = min(len(val_set), batch_size)
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=bs_val, shuffle=shuffle, drop_last=True)
+    logger.info('Effective batch_size: Training = {}, Testing = {}, Validity = {}'.format(bs_train, bs_test, bs_val))
+    logger.info('Number of batches per epoch: Training = {}, Testing = {}, ValidityTime = {}'.format(len(train_loader), len(test_loader), len(val_loader)))
 
     # create initial conditions for each window
     my_list = ['y0']
@@ -638,6 +655,9 @@ def train_model(model,
     grad_norm_pre_clip_history = []
     grad_norm_post_clip_history = []
     time_history = []
+    t_valid_history_05 = []
+    t_valid_history_40 = []
+
     myloss = torch.nn.MSELoss()
     t_outer = default_timer()
     for ep in range(epochs):
@@ -801,6 +821,61 @@ def train_model(model,
             test_loss_mse /= len(test_loader)
             test_loss_mse_history += [test_loss_mse]
 
+            # compute validity times by running on a few longer windows
+            ran_validity = False
+            for x, x_noisy, times, times_all, idx, i_traj, y0_TRUE, yend_TRUE in val_loader:
+                # only do 1 iteration,
+                if ran_validity:
+                    continue
+                else:
+                    ran_validity = True
+
+                if known_inits:
+                    y0 = y0_TRUE
+                    yend = yend_TRUE
+                else:
+                    y0 = model.y0[idx]
+                    yend = model.y0[idx+1]
+                if gpu:
+                    x, x_noisy, times, times_all, y0, yend, y0_TRUE, yend_TRUE = x.cuda(), x_noisy.cuda(), times.cuda(), times_all.cuda(), y0.cuda(), yend.cuda(), y0_TRUE.cuda(), yend_TRUE.cuda()
+
+                # set up initial condition
+                u0 = torch.hstack( (x_noisy[:,0,:], y0) ) # create full state vector
+                if gpu:
+                    u0 = u0.cuda()
+
+                # run forward model
+                t0_local = default_timer()
+                u0, upd_mean_vec = model.warmup(data=x_noisy[:,1:(warmup+1),:], u0=u0, dt=dt)
+                logger.extra('Testing warmup took {} seconds'.format(round(default_timer() - t0_local, 2)))
+
+                t0_local = default_timer()
+                if learn_inits_only:
+                    u_pred = x_normalizer.decode(odeint(rhs_true, y0=x_normalizer.encode(u0).T, t=times[0]).permute(0,2,1))
+                else:
+                    u_pred = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=times[0]))
+                logger.extra('Testing prediction took {} seconds'.format(round(default_timer() - t0_local, 2)))
+
+                # compute validity time
+                t_valid_dict = validity_time(x_noisy[:,warmup:,:].permute(1,0,2), u_pred[:, :, :model.dim_x])
+                t_valid_history_05 += [t_valid_dict[0.05]]
+                t_valid_history_40 += [t_valid_dict[0.4]]
+
+                if ep%plot_interval==0:
+                    bp()
+                    for b in range(5):
+                        output_path = os.path.join(plot_dir,'ValidityPlot_Epoch{}_Batch{}'.format(ep,b))
+                        t0_local = default_timer()
+                        train_plot(t_all=times_all[b].cpu().data, t=times[b].cpu().data,
+                                        x=x[b].cpu().data,
+                                        x_noisy=x_noisy[b].cpu().data,
+                                        u_pred=u_pred[:,b].cpu().data,
+                                        u_upd=upd_mean_vec[:,b],
+                                        warmup=warmup,
+                                        output_path=output_path)
+                        logger.extra('Validity Plot took {} seconds'.format(round(default_timer() - t0_local, 2)))
+
+
             # report summary stats
             if ep%fast_plot_interval==0:
                 logger.info('Epoch {}, Train loss {}, Test loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, test_loss, round(default_timer() - t1, 2)))
@@ -813,6 +888,8 @@ def train_model(model,
                 gn_dict = {'Layer {}'.format(l): np.array(grad_norm_post_clip_history)[:,l] for l in range(len(grad_norm_post_clip))}
                 plot_logs(x=gn_dict, name=os.path.join(summary_dir,'grad_norm_post_clip'), title='Gradient Norms (Post-Clip)', xlabel='Epochs')
 
+                plot_t_valid(x=pd.DataFrame(t_valid_history_05).T.melt(), name=os.path.join(summary_dir,'t_valid_05'), title='Validity Time (5%)', xlabel='Epochs')
+                plot_t_valid(x=pd.DataFrame(t_valid_history_40).T.melt(), name=os.path.join(summary_dir,'t_valid_40'), title='Validity Time (40%)', xlabel='Epochs')
 
                 if ep%(10*plot_interval)==0 and ep>0:
                     outdir = os.path.join(plot_dir, 'epoch{}'.format(ep))
@@ -903,7 +980,8 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, sol_3d_true_kde
         plt.close()
 
         fig, axs = plt.subplots(constrained_layout=True, nrows=1, figsize=(15, 15), sharex=True)
-        axs.plot(t_eval[:n],sol_4d_nn[:n,K:], marker='x')
+        not_obs_inds = [i for i in range(sol_4d_nn.shape[1]) if i not in obs_inds]
+        axs.plot(t_eval[:n],sol_4d_nn[:n,not_obs_inds], marker='x')
         axs.plot(t_eval[:n],sol_4d_nn[:n,obs_inds])
         black_line = matplotlib.lines.Line2D([], [], color='black', label='Observed States')
         black_x = matplotlib.lines.Line2D([], [], color='black', marker='x', markersize=15, label='Latent States')
