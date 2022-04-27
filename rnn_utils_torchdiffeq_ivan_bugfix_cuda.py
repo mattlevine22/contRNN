@@ -647,6 +647,7 @@ def train_model(model,
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=1.0, steps_per_epoch=len(train_loader), epochs=epochs, verbose=True)
     scheduler_plateau = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=factor_lr, verbose=True, min_lr=min_lr, patience=patience)
 
+    K_history = []
     lr_history = {key: [] for key in range(len(optimizer.param_groups))}
     train_loss_history = []
     train_loss_mse_history = []
@@ -757,6 +758,8 @@ def train_model(model,
                                     output_path=output_path)
                     logger.extra('Train Plot took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
+        # K history
+        K_history += [model.K.data.cpu().numpy()]
         # regularized loss
         train_loss /= len(train_loader)
         train_loss_history += [train_loss]
@@ -889,6 +892,9 @@ def train_model(model,
 
                 plot_t_valid(x=pd.DataFrame(t_valid_history_05).T.melt(), name=os.path.join(summary_dir,'t_valid_05'), title='Validity Time (5%)', xlabel='Epochs')
                 plot_t_valid(x=pd.DataFrame(t_valid_history_40).T.melt(), name=os.path.join(summary_dir,'t_valid_40'), title='Validity Time (40%)', xlabel='Epochs')
+
+                K_dict = {'K_{}'.format(l): np.array(K_history)[:,l] for l in range(len(K_history[0]))}
+                plot_logs(x=K_dict, name=os.path.join(summary_dir,'K_history'), title='Learning 3DVAR assimilation gain K', xlabel='Epochs')
 
                 if ep%(10*plot_interval)==0 and ep>0:
                     outdir = os.path.join(plot_dir, 'epoch{}'.format(ep))
