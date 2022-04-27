@@ -862,7 +862,6 @@ def train_model(model,
                 t_valid_history_40 += [t_valid_dict[0.4]]
 
                 if ep%plot_interval==0:
-                    bp()
                     for b in range(5):
                         output_path = os.path.join(plot_dir,'ValidityPlot_Epoch{}_Batch{}'.format(ep,b))
                         t0_local = default_timer()
