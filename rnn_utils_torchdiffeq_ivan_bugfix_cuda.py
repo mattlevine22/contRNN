@@ -561,6 +561,7 @@ def train_model(model,
                 cheat_normalization=True,
                 noisy_start=True,
                 T_long=5e3,
+                t_valid_thresh_list=[0.05, 0.2, 0.4],
                 eval_time_limit=600, # seconds
                 **kwargs):
 
@@ -656,8 +657,7 @@ def train_model(model,
     grad_norm_pre_clip_history = []
     grad_norm_post_clip_history = []
     time_history = []
-    t_valid_history_05 = []
-    t_valid_history_40 = []
+    t_valid_history = {t: [] for t in t_valid_thresh_list}
 
     myloss = torch.nn.MSELoss()
     t_outer = default_timer()
@@ -859,10 +859,10 @@ def train_model(model,
                     u_pred = x_normalizer.decode(odeint(model, y0=x_normalizer.encode(u0), t=times[0]))
                 logger.extra('Testing prediction took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
-                # compute validity time
-                t_valid_dict = validity_time(x_noisy[:,warmup:,:].permute(1,0,2), u_pred[:, :, :model.dim_x])
-                t_valid_history_05 += [t_valid_dict[0.05]]
-                t_valid_history_40 += [t_valid_dict[0.4]]
+                # compute validity time (USING TRUE X)
+                t_valid_dict = validity_time(x[:,warmup:,:].permute(1,0,2), u_pred[:, :, :model.dim_x], thresh_list=t_valid_thresh_list)
+                for th in t_valid_thresh_list:
+                    t_valid_history[th] += [t_valid_dict[th]]
 
                 if ep%plot_interval==0:
                     for b in range(5):
@@ -890,8 +890,9 @@ def train_model(model,
                 gn_dict = {'Layer {}'.format(l): np.array(grad_norm_post_clip_history)[:,l] for l in range(len(grad_norm_post_clip))}
                 plot_logs(x=gn_dict, name=os.path.join(summary_dir,'grad_norm_post_clip'), title='Gradient Norms (Post-Clip)', xlabel='Epochs')
 
-                plot_t_valid(x=pd.DataFrame(t_valid_history_05).T.melt(), name=os.path.join(summary_dir,'t_valid_05'), title='Validity Time (5%)', xlabel='Epochs')
-                plot_t_valid(x=pd.DataFrame(t_valid_history_40).T.melt(), name=os.path.join(summary_dir,'t_valid_40'), title='Validity Time (40%)', xlabel='Epochs')
+                for thresh in t_valid_history:
+                    prc = int(thresh*100)
+                    plot_t_valid(x=pd.DataFrame(t_valid_history[thresh]).T.melt(), name=os.path.join(summary_dir,'t_valid_{}'.format(prc)), title='Validity Time ({}%)'.format(prc), xlabel='Epochs')
 
                 K_dict = {'K_{}'.format(l): np.array(K_history)[:,l] for l in range(len(K_history[0]))}
                 plot_logs(x=K_dict, name=os.path.join(summary_dir,'K_history'), title='Learning 3DVAR assimilation gain K', xlabel='Epochs')
