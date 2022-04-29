@@ -52,14 +52,14 @@ def train_plot(t_all, t, x, x_noisy, u_pred, u_upd, warmup, output_path):
     plt.savefig(output_path + '.pdf', format='pdf')
     plt.close()
 
-def plot_logs(x, name, title, xlabel):
-    fig, ax = plt.subplots(nrows=1, figsize=(20, 10))
+def plot_logs(x, name, title, xlabel, figsize=(20, 10)):
+    fig, ax = plt.subplots(nrows=1, figsize=figsize)
     for key in x:
         ax.plot(x[key], label=key)
     ax.legend()
     ax.set_title(title)
     ax.set_xlabel(xlabel)
-    plt.savefig(name)
+    plt.savefig(name+'.pdf', format='pdf')
     ax.set_xscale('log')
     plt.savefig(name+'_xlog.pdf', format='pdf')
     ax.set_yscale('log')

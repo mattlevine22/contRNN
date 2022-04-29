@@ -895,7 +895,7 @@ def train_model(model,
                     plot_t_valid(x=pd.DataFrame(t_valid_history[thresh]).T.melt(), name=os.path.join(summary_dir,'t_valid_{}'.format(prc)), title='Validity Time ({}%)'.format(prc), xlabel='Epochs')
 
                 K_dict = {'K_{}'.format(l): np.array(K_history)[:,l] for l in range(len(K_history[0]))}
-                plot_logs(x=K_dict, name=os.path.join(summary_dir,'K_history'), title='Learning 3DVAR assimilation gain K', xlabel='Epochs')
+                plot_logs(x=K_dict, name=os.path.join(summary_dir,'K_history'), title='Learning 3DVAR assimilation gain K', xlabel='Epochs', figsize=(10,10))
 
                 if ep%(10*plot_interval)==0 and ep>0:
                     outdir = os.path.join(plot_dir, 'epoch{}'.format(ep))
@@ -998,11 +998,12 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, sol_3d_true_kde
         plt.close()
 
     ## Plot combined invariant measure of all states
+    figsize=(10,10) #(20,10) original
     ## Plot invariant measure of trajectories for full available time-window
     t0_local = default_timer()
     n = len(sol_3d_true) #int(1000/dt)
     n_burnin = int(0.1*n)
-    fig, axs = plt.subplots(figsize=(20, 10))
+    fig, axs = plt.subplots(figsize=figsize)
     if sol_3d_true_kde is None:
         logger.info('Generating true KDE---should only occur the first time plots are made.')
         sol_3d_true_kde = sns.kdeplot(np.random.choice(sol_3d_true[n_burnin:,obs_inds].reshape(-1), size=kde_subsample), label='True system').get_lines()[0].get_data()
@@ -1018,7 +1019,7 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, sol_3d_true_kde
 
     ## Plot invariant measure of trajectories for specific time-window (e.g. pre-collapse)
     n = min(nn_max, int(100/dt))
-    fig, axs = plt.subplots(figsize=(20, 10))
+    fig, axs = plt.subplots(figsize=figsize)
     axs.plot(sol_3d_true_kde[0], sol_3d_true_kde[1], label='True system')
 #     sns.kdeplot(sol_4d_true[:n,0], label='L63 - 4D')
     sns.kdeplot(sol_4d_nn[:n,obs_inds].reshape(-1), label='NN system')
@@ -1048,7 +1049,7 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, sol_3d_true_kde
         df_true = pd.DataFrame({'Time Lag': lag_vec, 'ACF': acf_true, 'Type': 'True system', 'State': k})
         df = pd.concat([df, df_approx, df_true], ignore_index=True)
 
-        fig, axs = plt.subplots(figsize=(20, 10))
+        fig, axs = plt.subplots(figsize=figsize)
         axs.plot(lag_vec, acf_true, label='True system')
         axs.plot(lag_vec, acf_approx, label='NN system')
         axs.set_xlabel('Time Lag')
@@ -1059,7 +1060,7 @@ def test_plots(x0, rhs_nn, nn_normalizer=None, sol_3d_true=None, sol_3d_true_kde
 
     acf_error_all = np.array(acf_error_all)
 
-    fig, axs = plt.subplots(figsize=(20, 10))
+    fig, axs = plt.subplots(figsize=figsize)
     sns.lineplot(data=df, x='Time Lag', y='ACF', hue='Type', ci='sd', hue_order=['True system', 'NN system'])
     plt.legend()
     plt.savefig(os.path.join(output_path, 'acf_combined.pdf'), format='pdf')
