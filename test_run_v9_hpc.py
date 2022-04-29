@@ -127,6 +127,7 @@ try:
         my_rnn = torch.load(os.path.join(output_dir, 'rnn.pt'))
     else:
         my_rnn = torch.load(os.path.join(output_dir, 'rnn.pt'), map_location=torch.device('cpu'))
+    my_rnn.gpu = FLAGS.gpu
     logger.info('Loaded pre-trained model.')
     pre_trained=True
 except:
