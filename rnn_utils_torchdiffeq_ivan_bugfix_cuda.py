@@ -21,6 +21,8 @@ import logging
 import signal
 from contextlib import contextmanager
 import pandas as pd
+import pickle
+
 from pdb import set_trace as bp
 
 plt.rcParams.update({'font.size': 22, 'legend.fontsize': 12,
@@ -587,6 +589,8 @@ def train_model(model,
     plot_dir = os.path.join(output_dir,'plots')
     os.makedirs(plot_dir, exist_ok=True)
 
+    pickle_file = os.path.join(output_dir, 'history.pkl')
+
     # set datasets as torch tensors
     x_train = torch.FloatTensor(x_train)
 
@@ -658,6 +662,17 @@ def train_model(model,
     grad_norm_post_clip_history = []
     time_history = []
     t_valid_history = {t: [] for t in t_valid_thresh_list}
+
+    history_dict = {'K_history': K_history,
+                    'lr_history': lr_history,
+                    'train_loss_history': train_loss_history,
+                    'train_loss_mse_history': train_loss_mse_history,
+                    'test_loss_history': test_loss_history,
+                    'test_loss_mse_history': test_loss_mse_history,
+                    'grad_norm_pre_clip_history': grad_norm_pre_clip_history,
+                    'grad_norm_post_clip_history': grad_norm_post_clip_history,
+                    'time_history': time_history,
+                    't_valid_history': t_valid_history}
 
     myloss = torch.nn.MSELoss()
     t_outer = default_timer()
@@ -880,6 +895,9 @@ def train_model(model,
 
             # report summary stats
             if ep%fast_plot_interval==0:
+                with open(pickle_file, "wb") as f:
+                    pickle.dump(history_dict, f)
+
                 logger.info('Epoch {}, Train loss {}, Test loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, test_loss, round(default_timer() - t1, 2)))
                 torch.save(model, os.path.join(output_dir, 'rnn.pt'))
                 plot_logs(x={'Time':time_history}, name=os.path.join(summary_dir,'timer'), title='Cumulative Training Time (hrs)', xlabel='Epochs')
