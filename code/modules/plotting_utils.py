@@ -37,6 +37,8 @@ def train_plot(t_all, t, x, x_noisy, u_pred, u_upd, warmup, output_path):
         axs[k].scatter(t_all, x_noisy[:,k], label='True State (noisy) {}'.format(k), color='orange')
         axs[k].plot(t, u_pred[:,k], label='NN-Predicted Latent State')
         axs[k].scatter(t_all[:(warmup+1)], u_upd[:,k], label='NN-Assimilated Latent State', marker='x')
+        axs[k].axvline(x=t_all[warmup], color='r', ls='--', lw=4)
+
     axs[0].legend()
 
     if K > K_obs:
@@ -45,6 +47,8 @@ def train_plot(t_all, t, x, x_noisy, u_pred, u_upd, warmup, output_path):
         black_x = matplotlib.lines.Line2D([], [], color='black', marker='x', markersize=15, label='NN-Assimilated Latent State')
         black_line = matplotlib.lines.Line2D([], [], color='black', label='NN-Predicted Latent State')
         axs[-1].legend(handles=[black_x, black_line])
+        axs[-1].axvline(x=t_all[warmup], color='r', ls='--', lw=4)
+
     plt.savefig(output_path + '.pdf', format='pdf')
     plt.close()
 
