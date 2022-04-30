@@ -27,6 +27,10 @@ from scipy.interpolate import interpn
 # sns.set(rc={'text.usetex': True}, font_scale=4)
 from pdb import set_trace as bp
 
+plt.rcParams.update({'font.size': 22, 'legend.fontsize': 12,
+                'legend.facecolor': 'white', 'legend.framealpha': 0.8,
+                'legend.loc': 'upper left', 'lines.linewidth': 4.0})
+
 def train_plot(t_all, t, x, x_noisy, u_pred, u_upd, warmup, output_path):
     K_obs = x.shape[1]
     K = u_pred.data.shape[-1]
