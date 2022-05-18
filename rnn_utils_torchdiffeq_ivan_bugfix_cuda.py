@@ -282,6 +282,13 @@ class Paper_NN(torch.nn.Module):
                 if self.gpu:
                     self.K = self.K.cuda()
 
+            def set_mask(self):
+                self.mask = torch.nn.Parameter(torch.ones(self.dim_y), requires_grad=bool(self.mask_hidden))
+                self.mask_ones = torch.ones(self.dim_y)
+                if self.gpu:
+                    self.mask = self.mask.cuda()
+                    self.mask_ones = self.mask_ones.cuda()
+
             def set_Gamma(self, obs_noise_sd=1):
                 self.Gamma = obs_noise_sd * torch.eye(self.dim_x)
                 if self.gpu:
@@ -314,11 +321,7 @@ class Paper_NN(torch.nn.Module):
                             self.bilinears.append(torch.nn.Bilinear(self.dim_hidden, self.dim_hidden, self.dim_output, bias=False))
 
                 # define masking variable for hidden dynamics
-                self.mask = torch.nn.Parameter(torch.ones(self.dim_y), requires_grad=bool(self.mask_hidden))
-                self.mask_ones = torch.ones(self.dim_y)
-                if self.gpu:
-                    self.mask = self.mask.cuda()
-                    self.mask_ones = self.mask_ones.cuda()
+                self.set_mask()
 
                 return
 
