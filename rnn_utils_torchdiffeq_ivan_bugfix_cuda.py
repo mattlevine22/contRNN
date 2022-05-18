@@ -873,7 +873,7 @@ def train_model(model,
                 # l1 loss on mask
                 if model.mask_hidden:
                     l1 = torch.linalg.vector_norm(model.mask, ord=1)
-                    test_loss += lambda_mask * l1 / model.dim_y
+                    test_loss += lambda_mask * l1.item() / model.dim_y
 
             # regularized loss
             test_loss /= len(test_loader)
