@@ -216,6 +216,7 @@ class Paper_NN(torch.nn.Module):
                         infer_ic=True,
                         gpu=False,
                         activation='relu',
+                        mask_hidden=False,
                         **kwargs):
                 super(Paper_NN, self).__init__()
 
@@ -233,6 +234,7 @@ class Paper_NN(torch.nn.Module):
                 self.alpha2 = alpha_barrier
 
                 # assign parameter dimensions
+                self.mask_hidden = mask_hidden
                 self.n_layers = n_layers
                 self.use_bilinear = use_bilinear
                 self.use_f0 = use_f0
@@ -311,7 +313,18 @@ class Paper_NN(torch.nn.Module):
                         if self.use_bilinear:
                             self.bilinears.append(torch.nn.Bilinear(self.dim_hidden, self.dim_hidden, self.dim_output, bias=False))
 
+                # define masking variable for hidden dynamics
+                self.mask = torch.nn.Parameter(torch.ones(self.dim_y), requires_grad=bool(self.mask_hidden))
+                self.mask_ones = torch.ones(self.dim_y)
+                if self.gpu:
+                    self.mask = self.mask.cuda()
+                    self.mask_ones = self.mask_ones.cuda()
+
                 return
+
+            def apply_mask(self, r):
+                # return self.mask * r.clone()
+                return torch.min(self.mask_ones, torch.abs(self.mask)) * r.clone()
 
             def compute_grad_norm(self):
                 '''Compute the norm of the gradients per layer.'''
@@ -324,6 +337,11 @@ class Paper_NN(torch.nn.Module):
                         layer_norm += self.bilinears[l].weight.grad.detach().data.norm(2).item()**2
                         layer_norm += self.bilinears[l].bias.grad.detach().data.norm(2).item()**2
                     grad_norm[l] = layer_norm ** 0.5
+
+                if self.K.requires_grad:
+                    grad_norm['K'] = self.K.grad.detach().data.norm(2).item()
+                if self.mask.requires_grad:
+                    grad_norm['mask'] = self.mask.grad.detach().data.norm(2).item()
 
                 try:
                     grad_norm['y0'] = self.y0.grad.detach().data.norm(2).item()
@@ -354,6 +372,10 @@ class Paper_NN(torch.nn.Module):
                 if self.infer_normalizers:
                     inp = self.encode(inp)
 
+                # r -> Pr
+                if self.mask_hidden:
+                    inp[:,self.dim_x:] = self.apply_mask(inp[:,self.dim_x:])
+
                 r = inp[:,self.dim_x:]
 
                 for l in range(self.n_layers):
@@ -367,6 +389,10 @@ class Paper_NN(torch.nn.Module):
                     g_hat = self.sigmoid(inp[:,self.dim_x:])  # set hidden dynamics to [0,1]
                     g_eff = g_hat * ( self.alpha1*(self.barrier - r) + self.alpha2*(self.barrier + r) ) - self.alpha2*(self.barrier + r)
                     inp[:,self.dim_x:] =  g_eff
+
+                # rdot -> P rdot
+                if self.mask_hidden:
+                    inp[:,self.dim_x:] = self.apply_mask(inp[:,self.dim_x:])
 
                 if self.infer_normalizers:
                     inp = self.decode(inp)
@@ -565,6 +591,7 @@ def train_model(model,
                 T_long=5e3,
                 t_valid_thresh_list=[0.05, 0.2, 0.4],
                 eval_time_limit=600, # seconds
+                lambda_mask=0.01,
                 **kwargs):
 
     if obs_inds is None:
@@ -652,6 +679,7 @@ def train_model(model,
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=1.0, steps_per_epoch=len(train_loader), epochs=epochs, verbose=True)
     scheduler_plateau = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=factor_lr, verbose=True, min_lr=min_lr, patience=patience)
 
+    mask_history = []
     K_history = []
     lr_history = {key: [] for key in range(len(optimizer.param_groups))}
     train_loss_history = []
@@ -663,7 +691,8 @@ def train_model(model,
     time_history = []
     t_valid_history = {t: [] for t in t_valid_thresh_list}
 
-    history_dict = {'K_history': K_history,
+    history_dict = {'mask_history': mask_history,
+                    'K_history': K_history,
                     'lr_history': lr_history,
                     'train_loss_history': train_loss_history,
                     'train_loss_mse_history': train_loss_mse_history,
@@ -742,6 +771,11 @@ def train_model(model,
             end_point_loss = lambda_endpoints * myloss(yend, u_pred[-1, :, model.dim_x:])
             loss += end_point_loss
 
+            # l1 loss on mask
+            if model.mask_hidden:
+                l1 = torch.linalg.vector_norm(model.mask, ord=1)
+                loss += lambda_mask * l1 / model.dim_y
+
             t0_local = default_timer()
             loss.backward()
             logger.extra('loss.backward() took {} seconds'.format(round(default_timer() - t0_local, 2)))
@@ -757,6 +791,7 @@ def train_model(model,
             grad_norm_post_clip += model.compute_grad_norm()
 
             optimizer.step()
+
             train_loss += loss.item()
 
             if ep%plot_interval==0:
@@ -773,6 +808,8 @@ def train_model(model,
                                     output_path=output_path)
                     logger.extra('Train Plot took {} seconds'.format(round(default_timer() - t0_local, 2)))
 
+        # mask history
+        mask_history += [model.mask.data.cpu().numpy()]
         # K history
         K_history += [model.K.data.cpu().numpy()]
         # regularized loss
@@ -830,6 +867,11 @@ def train_model(model,
                 end_point_loss = lambda_endpoints * myloss(yend, u_pred[-1, :, model.dim_x:])
                 loss += end_point_loss
                 test_loss += loss.item()
+
+                # l1 loss on mask
+                if model.mask_hidden:
+                    l1 = torch.linalg.vector_norm(model.mask, ord=1)
+                    test_loss += lambda_mask * l1 / model.dim_y
 
             # regularized loss
             test_loss /= len(test_loader)
@@ -900,6 +942,7 @@ def train_model(model,
 
                 logger.info('Epoch {}, Train loss {}, Test loss {}, Time per epoch [sec] = {}'.format(ep, train_loss, test_loss, round(default_timer() - t1, 2)))
                 torch.save(model, os.path.join(output_dir, 'rnn.pt'))
+
                 plot_logs(x={'Time':time_history}, name=os.path.join(summary_dir,'timer'), title='Cumulative Training Time (hrs)', xlabel='Epochs')
                 plot_logs(x={'Train':train_loss_history, 'Test':test_loss_history}, name=os.path.join(summary_dir,'loss_history'), title='Loss', xlabel='Epochs')
                 plot_logs(x=lr_history, name=os.path.join(summary_dir,'learning_rates'), title='Learning Rate Schedule', xlabel='Epochs')
@@ -914,6 +957,9 @@ def train_model(model,
 
                 K_dict = {'K_{}'.format(l): np.array(K_history)[:,l] for l in range(len(K_history[0]))}
                 plot_logs(x=K_dict, name=os.path.join(summary_dir,'K_history'), title='Learning 3DVAR assimilation gain K', xlabel='Epochs', figsize=(10,10))
+
+                mask_dict = {'mask_{}'.format(l): np.array(mask_history)[:,l] for l in range(len(mask_history[0]))}
+                plot_logs(x=mask_dict, name=os.path.join(summary_dir,'mask_history'), title='Learning hidden variable mask', xlabel='Epochs', figsize=(10,10))
 
                 if ep%(10*plot_interval)==0 and ep>0:
                     outdir = os.path.join(plot_dir, 'epoch{}'.format(ep))

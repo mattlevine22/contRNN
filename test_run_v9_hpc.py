@@ -20,6 +20,8 @@ import logging
 
 import argparse
 parser = argparse.ArgumentParser()
+parser.add_argument('--mask_hidden', default=0, type=int) #create an SVD-like projector on hidden state
+parser.add_argument('--lambda_mask', default=0.01, type=float) #penalize hoyer regularizer (l1/l2) for singular values of hidden projector
 parser.add_argument('--infer_K', default=0, type=int)
 parser.add_argument('--integrator', default='dopri5', type=str)
 parser.add_argument('--integrator_step_size', default=0.01, type=float) #inactive w/ dopri5
