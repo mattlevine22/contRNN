@@ -283,11 +283,10 @@ class Paper_NN(torch.nn.Module):
                     self.K = self.K.cuda()
 
             def set_mask(self):
-                self.mask = torch.nn.Parameter(torch.ones(self.dim_y), requires_grad=bool(self.mask_hidden))
                 self.mask_ones = torch.ones(self.dim_y)
                 if self.gpu:
-                    self.mask = self.mask.cuda()
                     self.mask_ones = self.mask_ones.cuda()
+                self.mask = torch.nn.Parameter(self.mask_ones.clone(), requires_grad=bool(self.mask_hidden))
 
             def set_Gamma(self, obs_noise_sd=1):
                 self.Gamma = obs_noise_sd * torch.eye(self.dim_x)
